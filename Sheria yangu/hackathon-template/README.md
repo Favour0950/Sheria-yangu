@@ -1,23 +1,21 @@
 # Sheria Yangu
 
-> Built during the **Democracy & AI Hackathon** — July 4th, 2026
-> Hosted by **Mozilla Foundation** & **KamiLimu**
+> Built during the **Democracy & AI Hackathon** — hosted by **Mozilla Foundation** and **KamiLimu** — July 4th, 2026.
+> This repository documents the feasibility sprint output submitted on the day of the hackathon.
 
-This work is part of a hackathon hosted by Mozilla Foundation and KamiLimu on Democracy and AI, July 4th, 2026.
-
-**Suggested repo name:** `sheria-yangu-<teamname>` (e.g. `sheria-yangu-violet-catherine`) — makes it easy for organisers to ID your team's repo among many.
-
----
-
+**Suggested repo naming convention:** `sheria-yangu` 
 ## Team
 
 | Name | Role | GitHub |
 |------|------|--------|
-| Onyango Violet Atieno | Frontend | [@handle] |
-| Catherine Atieno | Backend / AI integration | [@handle] |
+| Onyango Violet Atieno | Backend & LLM Integration | @Favour0950 |
+| Catherine Atieno | Frontend | @katepaul685 |
 
-**Team Name:** [Insert Team Name]
-**Universities:** Violet — University of Nairobi · Catherine — JKUAT
+**Team Name:** T002
+
+**University:** University of Nairobi & JKUAT
+
+**Statement:** This work was built as part of the Democracy and AI Hackathon hosted by Mozilla Foundation and KamiLimu on July 4th, 2026.
 
 ---
 
@@ -25,100 +23,126 @@ This work is part of a hackathon hosted by Mozilla Foundation and KamiLimu on De
 
 ### Problem Statement
 
-Young Nairobi residents aged 18–35 — boda boda riders in Mathare, market vendors in Gikomba,
-students in Embakasi — cannot exercise their Article 118 and Article 196 constitutional rights
-to participate in legislation because bills are published only in legal English on platforms
-requiring active search, and no tool exists that notifies them and translates bill content into
-plain language before the participation window closes.
+> Young Nairobi residents aged 18–35 — boda boda riders in Mathare, market vendors in Gikomba, students in Embakasi — cannot exercise their Article 118 and Article 196 constitutional rights to participate in legislation. During the Finance Bill 2023's public participation window, Parliament received just 1,080 memoranda from a country of 55 million people, overwhelmingly from corporations rather than individuals. This is because Parliament and county assemblies have no obligation to notify citizens when a bill opens for comment, bills are published only in dense legal English on platforms requiring active search, and existing tools like Mzalendo's Dokeza remain pull-based — citizens must actively visit the site to discover a bill, since Dokeza itself admits it has no push notification capability yet — and offer no Swahili translation or audio. Sheria Yangu closes this gap with a mobile-first tool that notifies citizens the moment a bill opens and translates its content into plain Swahili and English before the participation window closes.
+
+*(Full version with sources: [`docs/problem-statement.md`](docs/problem-statement.md))*
 
 ### Target User
 
 | Dimension | Detail |
-|---|---|
-| Primary user | Mobile-first youth aged 18–25 in peri-urban Nairobi (Mathare, Kibra, Embakasi) — boda boda riders, market vendors, small business owners |
-| Tech comfort | Comfortable with smartphones and social media; not comfortable with government websites or legal English |
-| Language | Kiswahili and English |
-| Current workflow | Learns about bills informally via social media, if at all — no direct, verified channel |
+|-----------|--------|
+| **Primary user** | A mobile-first young resident of Nairobi's peri-urban constituencies — Mathare, Kibra, Embakasi — such as a boda boda rider or market vendor aged 18–35 |
+| **Tech comfort** | Digitally active social media |
+| **Language** | Comfortable in plain Swahili and English |
+| **Current workflow** | Learns a law affects them only after it's enforced (e.g. a new county fee), with no prior awareness that the bill was ever open for public comment |
 
 ### The Specific Gap
 
-**What's already there:** Mzalendo Trust's Dokeza; Kenya Law's bill repository; Parliament's social media.
-**Why it falls short:** English-only, desktop-oriented, manually annotated, no proactive notification.
-**The gap we fill:** Mobile notification + AI plain-language (English/Swahili) clause summaries + one-tap agree/reject + auto-drafted memorandum.
-
-See `docs/problem-statement.md` for the full write-up, including sources.
+1. **What's already there:** Mzalendo Trust's **Dokeza** lets citizens annotate parliamentary bills online, endorsed by the National Assembly and Senate, and accessible on any internet-connected device, including mobile.
+2. **Why it falls short:** Dokeza is **pull-based** — its own FAQ admits push notifications are a feature they "hope to add... later" — so citizens must already know a bill exists to find it. Its expert annotations simplify legal jargon, but only **in English**, leaving non-English readers unserved. Annotation is manual, limiting coverage within tight participation windows, and it covers national bills only, not county ones.
+3. **The gap we fill:** Sheria Yangu proactively notifies citizens when a bill (national or county) opens for comment, delivers AI-generated clause summaries in plain Swahili and English, and compiles rejected clauses into a memorandum sent to the relevant legislative body.
 
 ### Why It Matters
 
-The Nairobi City County Finance Act 2023 was declared unconstitutional in June 2025 for
-failing meaningful public participation — after two years of citizens paying fees under a bill
-they never knew was open for comment. See `docs/problem-statement.md` for the full case and sources.
+> In 2023, Nairobi City County passed a Finance Act that introduced a Sh1,000 annual registration fee for every boda boda rider in the city, alongside new charges for taxis, market traders, and landlords. Most riders had no idea the bill had been open for public comment before it became law. Nairobi resident Jared Ngisa Nyabuto took the county to court — and in June 2025, the High Court declared the entire Finance Act 2023 unconstitutional, ruling that the county had presented fee schedules with no underlying policy analysis, meaning citizens had nothing meaningful to actually respond to. Two years of fees were collected under a law later found illegal. Nobody should need a court case to do what the Constitution already guarantees. Sheria Yangu exists so that the next Jared gets a notification on his phone instead — closing the gap between a constitutional right on paper and a right citizens can actually use.
 
 ---
 
 ## Run Instructions
 
 ### Prerequisites
+
 - Python 3.10+
-- A DeepSeek API key (provided by organisers via email)
+- pip
+- A DeepSeek API key (provided by KamiLimu for this hackathon)
+- A modern web browser (Chrome, Firefox, etc.)
 
 ### Quick Start
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/[org]/[repo].git
-cd [repo]
+git clone https://github.com/KamiLimu1/hackathon-template.git
+cd hackathon-template
 
 # 2. Create a virtual environment
 python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate        # Windows (Git Bash): source venv/Scripts/activate
 
 # 3. Install dependencies
 pip install -r requirements.txt
 
 # 4. Set environment variables
 cp .env.example .env
-# Edit .env and paste your DeepSeek API key into DEEPSEEK_API_KEY
-# Never commit .env — it's already in .gitignore
+# Open .env and fill in:
+#   DEEPSEEK_API_KEY=your-key-here
+#   DEEPSEEK_MODEL=deepseek-chat
+#   DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 
-# 5. Run the project
+# 5. Run the app
 python src/main.py
-
-# 6. Open the demo
-# Visit http://localhost:5000 in your browser
+# The app will be available locally at http://localhost:5000
 ```
+
+
+---
 
 ## 📁 Project Structure
 
 ```
 .
-├── README.md
+├── README.md                     ← You are here
 ├── docs/
-│   ├── problem-statement.md    ← Problem & user one-pager
-│   └── architecture.md         ← Data flow diagram, schema, built vs mocked
+│   ├── problem-statement.md      ← Full problem one-pager with sources
+│   └── architecture.md           ← Architecture diagram, data schema, built-vs-mocked table
 ├── src/
-│   ├── main.py                 ← Flask backend + DeepSeek calls
+│   ├── main.py                   ← Flask entry point & API routes
 │   └── static/
-│       └── index.html          ← 3-screen demo frontend (notification, clauses, memorandum)
+│       └── index.html            ← 3-screen demo: notification → clause vote → memorandum
 ├── data/
-│   └── sample_bill.json        ← Mocked bill (modeled on the real, nullified Nairobi Finance Act 2023)
+│   └── sample_bill.json          ← Mocked Nairobi Finance Bill clauses (demo input)
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
 └── LICENSE
 ```
 
+---
+
 ## Approach & Architecture
 
+Sheria Yangu takes a bill's clauses (currently a mocked Nairobi Finance Bill, see `data/sample_bill.json`), sends each clause to the DeepSeek API to generate a plain-language Swahili and English summary, and lets the user agree or reject it. Rejected clauses are compiled into a memorandum draft ready to send to Parliament.
+
 ```
-[User: Web App] → [Flask Backend] → [DeepSeek LLM API] → [Plain-language clause summaries + memorandum draft]
+[Bill clauses — data/sample_bill.json, mocked for this demo]
+        ↓
+[Flask backend — src/main.py]
+        ↓  POST /api/summarize
+[DeepSeek API — clause-by-clause Swahili + English summary]
+        ↓
+[Frontend — src/static/index.html: notification → clause cards → agree/reject]
+        ↓  POST /api/memorandum
+[Rejected clauses auto-compiled into memorandum draft]
+        ↓
+[User reviews → sends via mailto: to maoni@parliament.go.ke]
 ```
 
-Full diagram and data schema: `docs/architecture.md`.
+**Built today (hackathon, real):**
+- Flask backend with three working endpoints: `/api/bill`, `/api/summarize`, `/api/memorandum`
+- Live DeepSeek API call generating real clause summaries
+- 3-screen frontend demo (notification, clause vote, memorandum send), fully wired to the backend
 
-**Built today:** Flask API, mock bill data, live DeepSeek calls for clause simplification and memorandum drafting, 3-screen web demo.
-**Mocked today:** The bill content itself (not scraped live), and "sending" the memorandum (opens a `mailto:` draft rather than actually transmitting to Parliament).
-**Not built (Phase 2):** Push notifications, SMS/USSD channel, one-ID-per-vote verification, county-level analytics dashboard.
+**Mocked today:**
+- Bill content — a hardcoded Nairobi Finance Bill (`data/sample_bill.json`), not a live scrape of Parliament/county sources
+
+**Explicitly out of scope (Phase 2):**
+- Real-time bill scraping from Kenya Law / county assembly sites
+- User authentication and one-account-per-national-ID verification
+- Push notifications (in-app, SMS/USSD)
+- County-level participation analytics
+
+*(Full diagram and data schema: [`docs/architecture.md`](docs/architecture.md))*
+
+---
 
 ## License
 
