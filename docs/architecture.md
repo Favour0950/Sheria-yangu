@@ -36,8 +36,10 @@
        |  -> mailto: link opens        |                                  |
        |     (no server round-trip)    |                                  |
 ```
+![Sheria Yangu architecture diagram](architecture.png)
 
 ## What is built vs. mocked today
+**Legend:** Green solid = built and working today · Blue = live DeepSeek API calls · Grey dashed = designed but not built this sprint (Phase 2) · Orange dashed = mocked data
 
 | Component | Status | Notes |
 |---|---|---|
