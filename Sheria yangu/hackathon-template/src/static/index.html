@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sheria Yangu — Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --green:#0a7d3e; --red:#c0392b; --bg:#f4f6f5; --card:#ffffff; --ink:#1b1f1d; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); margin:0; color: var(--ink); }
+  .phone { max-width: 420px; margin: 24px auto; background: var(--card); border-radius: 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); overflow: hidden; min-height: 640px; display:flex; flex-direction:column; }
+  header { background: var(--green); color: white; padding: 16px 20px; font-weight: 600; font-size: 18px; }
+  .screen { padding: 20px; flex:1; display:none; }
+  .screen.active { display:block; }
+  .notif-card { background:#eaf6ee; border-left:4px solid var(--green); padding:16px; border-radius:8px; margin-bottom:16px; }
+  .notif-card h3 { margin:0 0 6px; font-size:16px; }
+  .notif-card p { margin:0; font-size:14px; color:#333; }
+  button { font-size:15px; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; }
+  .primary { background: var(--green); color:white; width:100%; margin-top:12px; }
+  .clause { border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:12px; }
+  .clause h4 { margin:0 0 6px; font-size:15px; }
+  .clause .lang { font-size:13px; margin:4px 0; }
+  .clause .lang.sw { color:#555; font-style:italic; }
+  .vote-row { display:flex; gap:8px; margin-top:10px; }
+  .vote-row button { flex:1; }
+  .agree { background:#e7f5ea; color:var(--green); border:1px solid var(--green); }
+  .reject { background:#fbeceb; color:var(--red); border:1px solid var(--red); }
+  .agree.selected { background:var(--green); color:white; }
+  .reject.selected { background:var(--red); color:white; }
+  .loading { color:#888; font-size:13px; }
+  textarea { width:100%; min-height:180px; font-size:14px; padding:10px; border-radius:8px; border:1px solid #ccc; }
+  .tag { display:inline-block; background:#eee; border-radius:6px; padding:2px 8px; font-size:12px; color:#555; margin-bottom:8px; }
+  nav { display:flex; justify-content:space-between; padding:12px 20px; border-top:1px solid #eee; }
+  nav button { background:none; color:var(--green); }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <header>Sheria Yangu</header>
+
+  <!-- SCREEN 1: Notification -->
+  <div class="screen active" id="screen-notif">
+    <div class="notif-card">
+      <h3>📜 New bill open for your input</h3>
+      <p id="notif-title">Loading bill...</p>
+      <p id="notif-deadline"></p>
+    </div>
+    <p style="font-size:14px;color:#555;">This bill affects boda boda riders, market vendors, taxi drivers, and small business owners in Nairobi. Tap below to see what it actually says — in plain language.</p>
+    <button class="primary" onclick="goToClauses()">Read the summary →</button>
+  </div>
+
+  <!-- SCREEN 2: Clause summaries + vote -->
+  <div class="screen" id="screen-clauses">
+    <span class="tag" id="clause-bill-title"></span>
+    <div id="clause-list"><p class="loading">Fetching clauses…</p></div>
+    <button class="primary" onclick="goToMemo()">Review my response →</button>
+  </div>
+
+  <!-- SCREEN 3: Memorandum review + send -->
+  <div class="screen" id="screen-memo">
+    <h3>Your memorandum</h3>
+    <p style="font-size:13px;color:#666;">Based on the clauses you rejected, here's a draft objection you can edit and send.</p>
+    <div id="memo-status" class="loading">Drafting your memorandum…</div>
+    <textarea id="memo-text"></textarea>
+    <button class="primary" onclick="sendMemo()">Tuma kwa Bunge (Send) →</button>
+  </div>
+
+  <nav>
+    <button onclick="showScreen('screen-notif')">1. Notification</button>
+    <button onclick="showScreen('screen-clauses')">2. Clauses</button>
+    <button onclick="showScreen('screen-memo')">3. Memorandum</button>
+  </nav>
+</div>
+
+<script>
+let bill = null;
+const votes = {}; // clause_id -> 'agree' | 'reject'
+
+async function loadBill() {
+  const res = await fetch('/api/bill');
+  bill = await res.json();
+  document.getElementById('notif-title').textContent = bill.title + ' is open for public participation.';
+  document.getElementById('notif-deadline').textContent = 'Deadline: ' + bill.participation_deadline;
+  document.getElementById('clause-bill-title').textContent = bill.title;
+  renderClauses();
+}
+
+function renderClauses() {
+  const list = document.getElementById('clause-list');
+  list.innerHTML = '';
+  bill.clauses.forEach(clause => {
+    const div = document.createElement('div');
+    div.className = 'clause';
+    div.id = 'clause-' + clause.clause_id;
+    div.innerHTML = `
+      <h4>${clause.title}</h4>
+      <p class="lang loading">Summarising in English + Kiswahili…</p>
+      <div class="vote-row">
+        <button class="agree" onclick="vote('${clause.clause_id}','agree')">✓ Kubali</button>
+        <button class="reject" onclick="vote('${clause.clause_id}','reject')">✗ Kataa</button>
+      </div>
+    `;
+    list.appendChild(div);
+    summarizeClause(clause);
+  });
+}
+
+async function summarizeClause(clause) {
+  try {
+    const res = await fetch('/api/summarize', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(clause)
+    });
+    const data = await res.json();
+    const div = document.getElementById('clause-' + clause.clause_id);
+    div.querySelector('p.lang').outerHTML = `
+      <p class="lang">🇬🇧 ${data.summary_en}</p>
+      <p class="lang sw">🇰🇪 ${data.summary_sw}</p>
+    `;
+  } catch (e) {
+    const div = document.getElementById('clause-' + clause.clause_id);
+    div.querySelector('p.lang').textContent = 'Could not reach AI service — showing raw clause: ' + clause.raw_text;
+  }
+}
+
+function vote(clauseId, choice) {
+  votes[clauseId] = choice;
+  const div = document.getElementById('clause-' + clauseId);
+  div.querySelector('.agree').classList.toggle('selected', choice === 'agree');
+  div.querySelector('.reject').classList.toggle('selected', choice === 'reject');
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goToClauses() { showScreen('screen-clauses'); }
+
+async function goToMemo() {
+  showScreen('screen-memo');
+  const rejected = bill.clauses.filter(c => votes[c.clause_id] === 'reject');
+  const statusEl = document.getElementById('memo-status');
+  const textEl = document.getElementById('memo-text');
+  if (rejected.length === 0) {
+    statusEl.textContent = 'You have not rejected any clauses yet — go back and vote first.';
+    textEl.value = '';
+    return;
+  }
+  statusEl.textContent = 'Drafting your memorandum…';
+  const res = await fetch('/api/memorandum', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ bill_title: bill.title, rejected_clauses: rejected })
+  });
+  const data = await res.json();
+  statusEl.textContent = 'Draft ready — edit as needed, then send:';
+  textEl.value = data.memorandum_text;
+}
+
+function sendMemo() {
+  const body = encodeURIComponent(document.getElementById('memo-text').value);
+  const subject = encodeURIComponent('Public Participation Memorandum: ' + (bill ? bill.title : ''));
+  window.location.href = `mailto:maoni@parliament.go.ke?subject=${subject}&body=${body}`;
+}
+
+loadBill();
+</script>
+</body>
+</html>

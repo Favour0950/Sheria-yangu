@@ -1,0 +1,40 @@
+{
+  "bill_id": "nairobi-finance-bill-2025",
+  "title": "Nairobi City County Finance Bill, 2025",
+  "county": "Nairobi",
+  "status": "open_for_participation",
+  "participation_deadline": "2026-07-13",
+  "source_note": "Illustrative clauses modeled on the structure of the Nairobi City County Finance Act 2023, which was declared unconstitutional in June 2025 for inadequate public participation.",
+  "clauses": [
+    {
+      "clause_id": "c1",
+      "title": "Boda boda annual registration fee",
+      "raw_text": "Every operator of a motorcycle used for commercial passenger transport within the County shall pay an annual registration fee of one thousand shillings, payable at the point of annual inspection, in addition to any national levies applicable under the Traffic Act.",
+      "affected_group": "boda boda riders"
+    },
+    {
+      "clause_id": "c2",
+      "title": "Taxi and app-hailing vehicle registration fee",
+      "raw_text": "Every vehicle registered for commercial taxi or app-based hailing services within the County shall pay an annual county registration fee of one thousand five hundred shillings, in addition to existing licensing requirements under the Traffic Act and National Transport and Safety Authority regulations.",
+      "affected_group": "taxi and app-hailing drivers"
+    },
+    {
+      "clause_id": "c3",
+      "title": "Market stall daily levy",
+      "raw_text": "Every trader operating a stall or stand within a designated County market shall pay a daily market levy as set out in the Second Schedule, collected by County-appointed market administrators or their agents.",
+      "affected_group": "market vendors"
+    },
+    {
+      "clause_id": "c4",
+      "title": "Single business permit fee adjustment",
+      "raw_text": "The Single Business Permit fee payable by micro and small enterprises operating within the County shall be adjusted according to the rates set out in the Third Schedule, replacing the rates applicable under the preceding Finance Act.",
+      "affected_group": "small business owners"
+    },
+    {
+      "clause_id": "c5",
+      "title": "Advertising and signage levy",
+      "raw_text": "Any person displaying outdoor advertising material, including banners, billboards, and shop signage, within the County shall pay an annual signage levy calculated per square metre of display area, as set out in the Fourth Schedule.",
+      "affected_group": "small business owners and landlords"
+    }
+  ]
+}
