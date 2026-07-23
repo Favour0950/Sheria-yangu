@@ -163,7 +163,18 @@ async function goToMemo() {
 function sendMemo() {
   const body = encodeURIComponent(document.getElementById('memo-text').value);
   const subject = encodeURIComponent('Public Participation Memorandum: ' + (bill ? bill.title : ''));
-  window.location.href = `mailto:maoni@parliament.go.ke?subject=${subject}&body=${body}`;
+  // Routing depends on which body the bill originated in — these three are NOT
+  // interchangeable:
+  //   county bill             -> clerk@nairobiassembly.go.ke (Nairobi City County Assembly)
+  //   national, National Assembly bill (e.g. Finance Bill) -> cna@parliament.go.ke
+  //   national, Senate bill (e.g. constitutional/county-focused) -> maoni@parliament.go.ke
+  // bill.level only distinguishes national/county today, not which House a
+  // national bill is from — until that's tracked, national bills default to
+  // cna@parliament.go.ke as the more common case for this app's bill mix.
+  const recipient = (bill && bill.level === 'county')
+    ? 'clerk@nairobiassembly.go.ke'
+    : 'cna@parliament.go.ke';
+  window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
 }
 
 loadBill();

@@ -61,8 +61,8 @@
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/KamiLimu1/hackathon-template.git
-cd hackathon-template
+git clone https://github.com/Favour0950/Sheria-yangu.git
+cd Sheria-yangu
 
 # 2. Create a virtual environment
 python -m venv venv
@@ -81,6 +81,10 @@ cp .env.example .env
 # 5. Run the app
 python src/main.py
 # The app will be available locally at http://localhost:5000
+
+# 6. (optional) Try the bill scraper
+python src/scraper.py --test     # offline dry run, needs data/sample_bill.pdf
+python src/scraper.py            # live: scrapes nairobiassembly.go.ke for real bills
 ```
 
 
@@ -123,7 +127,9 @@ Sheria Yangu takes a bill's clauses (currently a mocked Nairobi Finance Bill, se
         ↓  POST /api/memorandum
 [Rejected clauses auto-compiled into memorandum draft]
         ↓
-[User reviews → sends via mailto: to maoni@parliament.go.ke]
+[User reviews → sends via mailto: routed by bill level/origin —
+ county: clerk@nairobiassembly.go.ke · national (National Assembly): cna@parliament.go.ke ·
+ national (Senate): maoni@parliament.go.ke]
 ```
 
 **Built today (hackathon, real):**
