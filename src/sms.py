@@ -35,6 +35,13 @@ load_dotenv()
 
 AT_USERNAME = os.getenv("AT_USERNAME", "sandbox")
 AT_API_KEY = os.getenv("AT_API_KEY")
+# Shared shortcode (e.g. "20880") for KamiLimu's pooled Africa's Talking
+# account, if outbound sends need to go FROM it — unconfirmed whether this is
+# actually required (vs. the account's default originator) for a user's SMS
+# reply to correctly route back through the "kamilimu <project>" two-way
+# system. Left unset (None = use account default) until confirmed with Mark;
+# set AT_SENDER_ID in .env once you know, no code change needed after that.
+AT_SENDER_ID = os.getenv("AT_SENDER_ID") or None
 
 OTP_LENGTH = 6
 OTP_VALID_MINUTES = 5
@@ -75,7 +82,22 @@ def _get_sms_client():
     return africastalking.SMS
 
 
-AT_SMS_URL = "https://api.sandbox.africastalking.com/version1/messaging"
+# Africa's Talking uses a different host for the sandbox vs. a real (production)
+# account — the official SDK switches between these internally based on the
+# username you pass to initialize(), but the curl fallback below talks to the
+# HTTP API directly, so it has to make the same decision itself. This used to
+# be hardcoded to the sandbox URL, which would have silently sent (or rather,
+# silently FAILED to send, since a real API key won't authenticate against the
+# sandbox host) real production messages to the wrong endpoint the moment
+# AT_USERNAME was switched from "sandbox" to a real username like
+# "buildathon-sms" — a bug that would only show up once real credentials were
+# in use, not during any sandbox testing. Fixed to compute the right host from
+# AT_USERNAME, matching the SDK's own behaviour.
+AT_SMS_URL = (
+    "https://api.sandbox.africastalking.com/version1/messaging"
+    if AT_USERNAME == "sandbox"
+    else "https://api.africastalking.com/version1/messaging"
+)
 
 
 def _send_sms_via_curl(phone_number: str, message: str) -> dict:
@@ -106,17 +128,18 @@ def _send_sms_via_curl(phone_number: str, message: str) -> dict:
     import json as _json
     import subprocess
 
-    result = subprocess.run(
-        [
-            "curl", "-s", "-X", "POST", AT_SMS_URL,
-            "-H", f"apiKey: {AT_API_KEY}",
-            "-H", "Accept: application/json",
-            "--data-urlencode", f"username={AT_USERNAME}",
-            "--data-urlencode", f"to={phone_number}",
-            "--data-urlencode", f"message={message}",
-        ],
-        capture_output=True, text=True, timeout=30,
-    )
+    curl_args = [
+        "curl", "-s", "-X", "POST", AT_SMS_URL,
+        "-H", f"apiKey: {AT_API_KEY}",
+        "-H", "Accept: application/json",
+        "--data-urlencode", f"username={AT_USERNAME}",
+        "--data-urlencode", f"to={phone_number}",
+        "--data-urlencode", f"message={message}",
+    ]
+    if AT_SENDER_ID:
+        curl_args += ["--data-urlencode", f"from={AT_SENDER_ID}"]
+
+    result = subprocess.run(curl_args, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
         raise RuntimeError(f"curl fallback failed (exit {result.returncode}): {result.stderr}")
     try:
@@ -143,7 +166,7 @@ def _send_sms(phone_number: str, message: str) -> dict:
 
     try:
         sms = _get_sms_client()
-        return sms.send(message, [phone_number])
+        return sms.send(message, [phone_number], sender_id=AT_SENDER_ID)
     except (_requests.exceptions.ConnectionError, _requests.exceptions.Timeout,
             _requests.exceptions.SSLError) as exc:
         print(f"[sms] SDK/requests path failed ({exc.__class__.__name__}), "
