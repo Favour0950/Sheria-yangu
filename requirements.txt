@@ -10,6 +10,9 @@ pdfplumber>=0.11.0
 # SMS (OTP + notifications)
 africastalking>=1.2.9
 
+# Auth (JWT session tokens)
+PyJWT>=2.9.0
+
 # Database (local Postgres now, DigitalOcean droplet Postgres later — same schema)
 SQLAlchemy>=2.0.0
 psycopg2-binary>=2.9.9

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Enter code — Sheria Yangu</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="phone">
+  <header class="app-header">
+    <button class="back" onclick="window.location.href='signin.html'">←</button>
+    <span>Verify code</span>
+    <span style="width:18px;"></span>
+  </header>
+  <div class="screen-body">
+    <h2 class="title">Enter the 6-digit code</h2>
+    <p class="subtitle" id="sent-to">Sent by SMS.</p>
+
+    <div id="error-box" class="error-box"></div>
+
+    <div class="otp-input" id="otp-boxes">
+      <input type="text" inputmode="numeric" maxlength="1">
+      <input type="text" inputmode="numeric" maxlength="1">
+      <input type="text" inputmode="numeric" maxlength="1">
+      <input type="text" inputmode="numeric" maxlength="1">
+      <input type="text" inputmode="numeric" maxlength="1">
+      <input type="text" inputmode="numeric" maxlength="1">
+    </div>
+
+    <button class="primary" id="verify-btn" onclick="verifyCode()">Verify →</button>
+    <button class="link-btn" onclick="resend()">Didn't get a code? Resend</button>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+  const errorBox = document.getElementById('error-box');
+  const phone = SY.getPhone();
+  document.getElementById('sent-to').textContent = phone
+    ? `Sent to ${phone}.`
+    : 'No phone number on file — go back and sign in again.';
+
+  const boxes = Array.from(document.querySelectorAll('#otp-boxes input'));
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      box.value = box.value.replace(/[^0-9]/g, '');
+      if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+    });
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !box.value && i > 0) boxes[i - 1].focus();
+    });
+  });
+
+  // Dev convenience: SMS_DEV_MODE on the server returns the real code inline
+  // (see docs/TESTING.md section 6) — pre-fill it here so local testing
+  // doesn't require checking a terminal and retyping six digits.
+  const devCode = sessionStorage.getItem('sy_dev_otp_code');
+  if (devCode && devCode.length === boxes.length) {
+    devCode.split('').forEach((digit, i) => { boxes[i].value = digit; });
+  }
+
+  async function verifyCode() {
+    SY.hideError(errorBox);
+    const code = boxes.map(b => b.value).join('');
+    if (code.length !== boxes.length || !phone) {
+      SY.showError(errorBox, 'Enter all 6 digits.');
+      return;
+    }
+    const btn = document.getElementById('verify-btn');
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    try {
+      const res = await SY.apiFetch('/api/auth/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone_number: phone, code }),
+      }, { redirectOn401: false });
+      const data = await res.json();
+      if (!res.ok) {
+        SY.showError(errorBox, data.error || 'Verification failed.');
+        return;
+      }
+      SY.setToken(data.access_token);
+      sessionStorage.removeItem('sy_dev_otp_code');
+      window.location.href = 'bill-detail.html';
+    } catch (e) {
+      SY.showError(errorBox, 'Network error — check the server is running and try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Verify →';
+    }
+  }
+
+  async function resend() {
+    if (!phone) { window.location.href = 'signin.html'; return; }
+    SY.hideError(errorBox);
+    try {
+      const res = await SY.apiFetch('/api/auth/request-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone_number: phone }),
+      }, { redirectOn401: false });
+      const data = await res.json();
+      if (res.ok && data.dev_otp_code) {
+        sessionStorage.setItem('sy_dev_otp_code', data.dev_otp_code);
+        boxes.forEach(b => b.value = '');
+        data.dev_otp_code.split('').forEach((digit, i) => { boxes[i].value = digit; });
+      }
+      errorBox.style.color = res.ok ? 'var(--green)' : '';
+      errorBox.style.borderColor = res.ok ? 'var(--green)' : '';
+      errorBox.style.background = res.ok ? 'transparent' : '';
+      SY.showError(errorBox, res.ok ? 'A new code was sent.' : (data.error || 'Could not resend.'));
+    } catch (e) {
+      SY.showError(errorBox, 'Network error resending the code.');
+    }
+  }
+</script>
+</body>
+</html>

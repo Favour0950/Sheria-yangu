@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sheria Yangu</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="phone">
+  <div class="splash-wrap">
+    <div class="logo">📜</div>
+    <h1>Sheria Yangu</h1>
+    <p>Your right to be heard — in your language, on your phone.</p>
+    <button class="primary" onclick="getStarted()">Get Started →</button>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+  // Theme toggle used to live here too, but now that SY.injectNav()'s side
+  // drawer has a persistent one on every authenticated screen, having a
+  // second, disconnected toggle just on this one pre-login page was
+  // redundant. Splash still respects whatever theme was last chosen
+  // (SY.initTheme() in app.js reads it from localStorage on every page,
+  // including this one) — there's just no separate switch to change it here.
+  function getStarted() {
+    window.location.href = SY.isSignedIn() ? 'bill-detail.html' : 'signin.html';
+  }
+</script>
+</body>
+</html>

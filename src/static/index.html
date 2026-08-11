@@ -81,7 +81,12 @@ async function loadBill() {
   const res = await fetch('/api/bill');
   bill = await res.json();
   document.getElementById('notif-title').textContent = bill.title + ' is open for public participation.';
-  document.getElementById('notif-deadline').textContent = 'Deadline: ' + bill.participation_deadline;
+  // Real scraped bills don't have a confirmed deadline yet (opens_at/closes_at
+  // are null until a bill's status is manually verified as "open" — see
+  // scraper.py's docstring) — fall back to something honest instead of
+  // showing "Deadline: undefined".
+  document.getElementById('notif-deadline').textContent = 'Deadline: ' +
+    (bill.closes_at || bill.participation_deadline || 'to be confirmed');
   document.getElementById('clause-bill-title').textContent = bill.title;
   renderClauses();
 }
@@ -93,8 +98,13 @@ function renderClauses() {
     const div = document.createElement('div');
     div.className = 'clause';
     div.id = 'clause-' + clause.clause_id;
+    // Real scraped clauses have title: null (scraper.py never generates one —
+    // see its docstring), unlike the old mocked demo bill which always had a
+    // title. Fall back to "Clause <number>" instead of literally showing "null".
+    const clauseTitle = clause.title || ('Clause ' + (clause.clause_number || '?'));
     div.innerHTML = `
-      <h4>${clause.title}</h4>
+      <h4>${clauseTitle}</h4>`;
+    div.innerHTML += `
       <p class="lang loading">Summarising in English + Kiswahili…</p>
       <div class="vote-row">
         <button class="agree" onclick="vote('${clause.clause_id}','agree')">✓ Kubali</button>

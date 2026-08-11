@@ -69,6 +69,8 @@ class TrackedBill:
     year: int | None
     stage: str
     is_active: bool  # heuristic only — NOT a confirmed public-participation window
+    detail_url: str | None = None  # Mzalendo's own bill detail page — scraper_national.py
+    # follows this to find the bill's actual PDF (see that module's docstring)
 
 
 def fetch_mzalendo_bills(house: str = "na") -> list[TrackedBill]:
@@ -85,13 +87,18 @@ def fetch_mzalendo_bills(house: str = "na") -> list[TrackedBill]:
     reader = csv.DictReader(io.StringIO(resp.text))
     bills = []
     for row in reader:
-        title = (row.get("title") or row.get("Bill") or row.get("name") or "").strip()
-        stage_raw = (row.get("stage") or row.get("Stage") or "").strip()
-        year = None
-        for cell in row.values():
-            if cell and cell.strip().isdigit() and len(cell.strip()) == 4:
-                year = int(cell.strip())
-                break
+        # Confirmed real column names (2026-07-23): ID,Bill,Year,Stage,Sponsor,House,Updated,URL
+        # Kept the lowercase/"name" fallbacks too in case Mzalendo ever renames columns.
+        title = (row.get("Bill") or row.get("title") or row.get("name") or "").strip()
+        stage_raw = (row.get("Stage") or row.get("stage") or "").strip()
+        detail_url = (row.get("URL") or row.get("url") or "").strip() or None
+        year_cell = (row.get("Year") or "").strip()
+        year = int(year_cell) if year_cell.isdigit() and len(year_cell) == 4 else None
+        if year is None:  # fallback: scan every cell if the Year column itself is missing/renamed
+            for cell in row.values():
+                if cell and cell.strip().isdigit() and len(cell.strip()) == 4:
+                    year = int(cell.strip())
+                    break
         stage_lower = stage_raw.lower()
         is_withdrawn_or_done = any(closed in stage_lower for closed in CLOSED_STAGES)
         is_recent = year is None or year >= CURRENT_YEAR - 1
@@ -100,6 +107,7 @@ def fetch_mzalendo_bills(house: str = "na") -> list[TrackedBill]:
             year=year,
             stage=stage_raw or "stage not recorded",
             is_active=(not is_withdrawn_or_done) and is_recent,
+            detail_url=detail_url,
         ))
     return bills
 

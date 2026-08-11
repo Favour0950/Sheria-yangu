@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Clauses — Sheria Yangu</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .clause .lang { font-size: 13px; margin: 4px 0; }
+  .clause .lang.sw { color: var(--ink-muted); font-style: italic; }
+  .vote-row { display: flex; gap: 8px; margin-top: 10px; }
+  .vote-row button { flex: 1; font-size: 14px; padding: 10px; border-radius: 8px; cursor: pointer; }
+  .agree { background: #e7f5ea; color: var(--green); border: 1px solid var(--green); }
+  .reject { background: #fbeceb; color: var(--red); border: 1px solid var(--red); }
+  .agree.selected { background: var(--green); color: white; }
+  .reject.selected { background: var(--red); color: white; }
+  .loading { color: var(--ink-muted); font-size: 13px; }
+  .lang-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .lang-toggle button {
+    flex: 1; padding: 8px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    background: none; border: 1px solid var(--border); color: var(--ink-muted);
+  }
+  .lang-toggle button.active { background: var(--green); color: white; border-color: var(--green); }
+  .lang.hidden-lang { display: none; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <header class="app-header">
+    <button class="back" onclick="window.location.href='bill-choice.html?id=' + encodeURIComponent(SY.getBillId())">←</button>
+    <span id="bill-title-header">Clauses</span>
+    <span style="width:18px;"></span>
+  </header>
+  <div class="screen-body">
+    <div id="error-box" class="error-box"></div>
+    <div class="lang-toggle">
+      <button id="lang-en-btn" class="active" onclick="setLang('en')">English</button>
+      <button id="lang-sw-btn" onclick="setLang('sw')">Kiswahili</button>
+    </div>
+    <div id="clause-list"><p class="loading">Fetching clauses…</p></div>
+    <button class="primary" onclick="goToTerms()">Review my response →</button>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+  const errorBox = document.getElementById('error-box');
+  let bill = null;
+  const billId = new URLSearchParams(window.location.search).get('id') || SY.getBillId();
+  SY.clearVotes(); // start each fresh read with a clean vote set for this bill
+
+  // Language choice is intentionally NOT persisted anywhere (no localStorage
+  // key for it) — it always starts back at English for a freshly opened
+  // bill, per the request that switching languages here shouldn't carry over
+  // to the next bill you read.
+  let currentLang = 'en';
+
+  // Only invoke loadBill() after every const/let above has actually been
+  // assigned — calling it any earlier (even one line earlier) throws a
+  // "Cannot access 'billId' before initialization" error the moment loadBill
+  // runs its first synchronous check, because JS's TDZ blocks reading a
+  // const/let before its declaration line has executed. Since loadBill is
+  // async, that throw becomes a silently unhandled promise rejection instead
+  // of a visible crash — the page just freezes on "Fetching clauses…"
+  // forever with no error shown. This exact bug also existed in memo.html.
+  if (SY.requireSignIn()) { loadBill(); SY.injectNav('bills'); }
+
+  async function loadBill() {
+    if (!billId) { window.location.href = 'bill-detail.html'; return; }
+    try {
+      const res = await SY.apiFetch('/api/bill?id=' + encodeURIComponent(billId), {}, { redirectOn401: false });
+      bill = await res.json();
+      if (!res.ok) {
+        SY.showError(errorBox, bill.error || 'Bill not found.');
+        return;
+      }
+      document.getElementById('bill-title-header').textContent = bill.title || 'Clauses';
+      renderClauses();
+    } catch (e) {
+      SY.showError(errorBox, 'Could not load this bill — check the server is running.');
+    }
+  }
+
+  function renderClauses() {
+    const list = document.getElementById('clause-list');
+    list.innerHTML = '';
+    const clauses = bill.clauses || [];
+    if (clauses.length === 0) {
+      list.innerHTML = '<div class="empty-state">No clauses were extracted from this bill\'s PDF yet.</div>';
+      return;
+    }
+    clauses.forEach(clause => {
+      const div = document.createElement('div');
+      div.className = 'clause card';
+      div.id = 'clause-' + clause.clause_id;
+      // Real scraped clauses have title: null by design (scraper.py never
+      // generates one) — fall back to "Clause <number>" instead of "null".
+      // The heading itself was NOT covered by the language toggle before —
+      // it always said "Clause 1" even in Kiswahili mode — so it now carries
+      // both variants the same way the vote buttons do.
+      const clauseNum = clause.clause_number || '?';
+      const titleEn = clause.title || ('Clause ' + clauseNum);
+      const titleSw = clause.title || ('Kifungu cha ' + clauseNum);
+      div.innerHTML = `
+        <h4 class="clause-title" data-en="${titleEn}" data-sw="${titleSw}">${titleEn}</h4>
+        <p class="lang loading">Summarising in English + Kiswahili…</p>
+        <div class="vote-row">
+          <button class="agree" data-en="✓ Agree" data-sw="✓ Kubali"
+                  onclick="vote('${clause.clause_id}','kubali')">✓ Kubali</button>
+          <button class="reject" data-en="✗ Reject" data-sw="✗ Kataa"
+                  onclick="vote('${clause.clause_id}','kataa')">✗ Kataa</button>
+        </div>
+      `;
+      list.appendChild(div);
+      summarizeClause(clause);
+    });
+    applyLanguageLabels();
+  }
+
+  function applyLanguageLabels() {
+    document.querySelectorAll('.vote-row button').forEach(btn => {
+      btn.textContent = currentLang === 'sw' ? btn.dataset.sw : btn.dataset.en;
+    });
+    document.querySelectorAll('.clause-title').forEach(el => {
+      el.textContent = currentLang === 'sw' ? el.dataset.sw : el.dataset.en;
+    });
+  }
+
+  async function summarizeClause(clause) {
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clause),
+      });
+      const data = await res.json();
+      const div = document.getElementById('clause-' + clause.clause_id);
+      const swHidden = currentLang !== 'sw' ? ' hidden-lang' : '';
+      const enHidden = currentLang !== 'en' ? ' hidden-lang' : '';
+      div.querySelector('p.lang').outerHTML = `
+        <p class="lang lang-en${enHidden}">🇬🇧 ${data.summary_en}</p>
+        <p class="lang sw lang-sw${swHidden}">🇰🇪 ${data.summary_sw}</p>
+      `;
+    } catch (e) {
+      const div = document.getElementById('clause-' + clause.clause_id);
+      div.querySelector('p.lang').textContent = 'Could not reach AI service — showing raw clause: ' + clause.raw_text;
+    }
+  }
+
+  async function vote(clauseId, choice) {
+    SY.setVote(clauseId, choice);
+    const div = document.getElementById('clause-' + clauseId);
+    div.querySelector('.agree').classList.toggle('selected', choice === 'kubali');
+    div.querySelector('.reject').classList.toggle('selected', choice === 'kataa');
+    // Persist the real vote immediately — this is the authenticated,
+    // database-backed write (/api/responses), unlike the old demo which only
+    // held votes in memory.
+    try {
+      await SY.apiFetch('/api/responses', {
+        method: 'POST',
+        body: JSON.stringify({ bill_id: billId, clause_id: clauseId, vote: choice }),
+      });
+    } catch (e) {
+      SY.showError(errorBox, 'Vote saved locally but could not reach the server — it will retry on the next click.');
+    }
+  }
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.getElementById('lang-en-btn').classList.toggle('active', lang === 'en');
+    document.getElementById('lang-sw-btn').classList.toggle('active', lang === 'sw');
+    document.querySelectorAll('.lang-en').forEach(el => el.classList.toggle('hidden-lang', lang !== 'en'));
+    document.querySelectorAll('.lang-sw').forEach(el => el.classList.toggle('hidden-lang', lang !== 'sw'));
+    // Vote buttons (Kubali/Kataa) and the "Clause N" headings were always
+    // shown untranslated regardless of the toggle — now both switch too.
+    applyLanguageLabels();
+  }
+
+  function goToTerms() {
+    const votes = SY.getVotes();
+    const rejected = Object.keys(votes).filter(id => votes[id] === 'kataa');
+    if (rejected.length === 0) {
+      SY.showError(errorBox, 'You have not rejected any clauses yet — reject at least one to draft a memorandum, or go back to Bills.');
+      return;
+    }
+    window.location.href = 'terms.html?id=' + encodeURIComponent(billId);
+  }
+</script>
+</body>
+</html>

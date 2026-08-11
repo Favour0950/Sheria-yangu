@@ -84,7 +84,7 @@ MIN_YEAR = datetime.now().year - 1
 def load_seen() -> dict:
     if not SEEN_PATH.exists():
         return {}
-    raw = json.loads(SEEN_PATH.read_text())
+    raw = json.loads(SEEN_PATH.read_text(encoding="utf-8"))
     if isinstance(raw, list):
         # Old flat-list format only recorded "we touched this URL", never whether
         # extraction actually succeeded — so it must NOT be upgraded to "ok"
@@ -99,7 +99,7 @@ def load_seen() -> dict:
 
 def save_seen(seen: dict) -> None:
     SEEN_PATH.parent.mkdir(parents=True, exist_ok=True)
-    SEEN_PATH.write_text(json.dumps(seen, indent=2, sort_keys=True))
+    SEEN_PATH.write_text(json.dumps(seen, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def extract_year(url: str, title: str) -> int | None:
@@ -282,7 +282,7 @@ def run_live() -> None:
                 bill_json["status"] = "needs_manual_review"  # no year detected — flag, don't guess
             OUT_DIR.mkdir(parents=True, exist_ok=True)
             out_path = OUT_DIR / f"{pdf_path.stem}.json"
-            out_path.write_text(json.dumps(bill_json, indent=2, ensure_ascii=False))
+            out_path.write_text(json.dumps(bill_json, indent=2, ensure_ascii=False), encoding="utf-8")
             print(f"    -> {len(clauses)} clause(s) written to {out_path}")
             seen[url] = {"status": "ok", "pdf_path": str(pdf_path)}
             new_count += 1

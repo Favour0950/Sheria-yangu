@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Terms & consent — Sheria Yangu</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="phone">
+  <header class="app-header">
+    <button class="back" onclick="goBack()">←</button>
+    <span>Before you send</span>
+    <span style="width:18px;"></span>
+  </header>
+  <div class="screen-body">
+    <div id="error-box" class="error-box"></div>
+    <h2 class="title">Confirm before we draft your memorandum</h2>
+    <p class="subtitle">This is required for every memorandum — /api/memoranda rejects
+       the request unless all three are confirmed.</p>
+
+    <div class="consent-item">
+      <input type="checkbox" id="c1">
+      <span>I have read the plain-language summary of the clause(s) I'm objecting to.</span>
+    </div>
+    <div class="consent-item">
+      <input type="checkbox" id="c2">
+      <span>I confirm I am a real person submitting this myself, not an automated bot or a coordinated bulk submission.</span>
+    </div>
+    <div class="consent-item">
+      <input type="checkbox" id="c3">
+      <span>I accept Sheria Yangu's terms of use and understand my constituency (if provided) is self-reported and unverified.</span>
+    </div>
+
+    <button class="primary" id="continue-btn" onclick="continueToMemo()" disabled>Draft my memorandum →</button>
+
+    <div class="disclosure-note">
+      Sheria Yangu never sends this on your behalf automatically — the next screen
+      opens your own email app so you send it yourself, and we only record that you did.
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+  if (SY.requireSignIn()) { SY.injectNav('bills'); }
+
+  const billId = new URLSearchParams(window.location.search).get('id') || SY.getBillId();
+  const boxes = [document.getElementById('c1'), document.getElementById('c2'), document.getElementById('c3')];
+  const continueBtn = document.getElementById('continue-btn');
+
+  boxes.forEach(b => b.addEventListener('change', updateContinueState));
+  function updateContinueState() {
+    continueBtn.disabled = !boxes.every(b => b.checked);
+  }
+
+  function goBack() {
+    window.location.href = 'clauses.html?id=' + encodeURIComponent(billId);
+  }
+
+  function continueToMemo() {
+    // Consents are passed via query-less sessionStorage rather than the URL,
+    // since they're submitted straight to /api/memoranda on the next page —
+    // no need for them to be bookmarkable or visible in the address bar.
+    sessionStorage.setItem('sy_consents', JSON.stringify({
+      consent_read_summary: true, consent_not_bot: true, consent_terms: true,
+    }));
+    window.location.href = 'memo.html?id=' + encodeURIComponent(billId);
+  }
+</script>
+</body>
+</html>

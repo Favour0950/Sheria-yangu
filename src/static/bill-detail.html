@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bills — Sheria Yangu</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="phone">
+  <header class="app-header">
+    <button class="back" onclick="history.back()">←</button>
+    <span>Open for participation</span>
+    <span style="width:18px;"></span>
+  </header>
+  <div class="screen-body">
+    <div id="error-box" class="error-box"></div>
+    <p class="status-line" id="status-line">Loading bills…</p>
+    <div id="bill-list"></div>
+  </div>
+
+  <div class="sy-footer">© Sheria Yangu 2026</div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+  if (SY.requireSignIn()) { loadBills(); SY.injectNav('bills'); }
+
+  const errorBox = document.getElementById('error-box');
+  const statusLine = document.getElementById('status-line');
+  const listEl = document.getElementById('bill-list');
+
+  async function loadBills() {
+    try {
+      // /api/bills/open is the one true "safe to show as open" source (see
+      // main.py's list_open_bills docstring). It will very likely be empty
+      // right now — no scraper can confirm a real participation window yet —
+      // so fall back to the general listing with an honest "pending review"
+      // label rather than showing a blank screen with no explanation.
+      let res = await SY.apiFetch('/api/bills/open', {}, { redirectOn401: false });
+      let bills = await res.json();
+      let openOnly = true;
+
+      if (!Array.isArray(bills) || bills.length === 0) {
+        res = await SY.apiFetch('/api/bills', {}, { redirectOn401: false });
+        bills = await res.json();
+        openOnly = false;
+      }
+
+      if (!Array.isArray(bills) || bills.length === 0) {
+        statusLine.textContent = '';
+        listEl.innerHTML = '<div class="empty-state">No bills have been scraped yet on this machine. ' +
+          'Run the scrapers (see docs/TESTING.md section 4), then reload this page.</div>';
+        return;
+      }
+
+      statusLine.textContent = openOnly
+        ? `${bills.length} bill(s) confirmed open for public participation.`
+        : `No bill has a confirmed open participation window yet — showing all ${bills.length} scraped bill(s) pending review.`;
+
+      listEl.innerHTML = '';
+      bills.forEach(bill => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        const levelClass = bill.level === 'county' ? 'level-county' : 'level-national';
+        div.innerHTML = `
+          <span class="tag ${levelClass}">${bill.level || 'unknown level'}${bill.year ? ' · ' + bill.year : ''}</span>
+          <h3>${bill.title || 'Untitled bill'}</h3>
+          <p>${bill.clause_count || 0} clause(s) scraped
+             ${openOnly ? '' : ' · ' + SY.friendlyStatus(bill.status)}</p>
+          <button class="primary" style="margin-top:10px;" onclick="selectBill('${bill.id}')">View this bill →</button>
+        `;
+        listEl.appendChild(div);
+      });
+    } catch (e) {
+      SY.showError(errorBox, 'Could not load bills — check the server is running.');
+    }
+  }
+
+  function selectBill(billId) {
+    SY.setBillId(billId);
+    window.location.href = 'bill-choice.html?id=' + encodeURIComponent(billId);
+  }
+</script>
+</body>
+</html>

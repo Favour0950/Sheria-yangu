@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Settings — Sheria Yangu</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="phone">
+  <header class="app-header">
+    <button class="back" onclick="history.back()">←</button>
+    <span>Settings</span>
+    <span style="width:18px;"></span>
+  </header>
+  <div class="screen-body">
+    <div id="error-box" class="error-box"></div>
+    <p class="status-line" id="loading-line">Loading your settings…</p>
+
+    <div id="settings-form" style="display:none;">
+      <label for="constituency">Constituency <span style="font-weight:400;color:var(--ink-muted);">(self-reported, not verified against the voter roll)</span></label>
+      <input type="text" id="constituency" placeholder="e.g. Kibra">
+
+      <div class="toggle-row">
+        <span>Notify me by SMS when a bill I care about opens</span>
+        <label class="switch">
+          <input type="checkbox" id="notify-sms">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span>Notify me by email</span>
+        <label class="switch">
+          <input type="checkbox" id="notify-email">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <button class="primary" id="save-btn" onclick="save()">Save changes</button>
+
+      <div class="theme-toggle">
+        <span>Light</span>
+        <label class="switch">
+          <input type="checkbox" id="theme-switch" onchange="SY.toggleTheme()">
+          <span class="slider"></span>
+        </label>
+        <span>Dark</span>
+      </div>
+
+      <button class="link-btn" style="margin-top:20px;color:var(--red);" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="sy-footer">© Sheria Yangu 2026</div>
+</div>
+
+<script src="js/app.js"></script>
+<script>
+  if (SY.requireSignIn()) { loadSettings(); SY.injectNav('settings'); }
+
+  const errorBox = document.getElementById('error-box');
+  document.getElementById('theme-switch').checked =
+    document.documentElement.getAttribute('data-theme') === 'dark';
+
+  async function loadSettings() {
+    try {
+      const res = await SY.apiFetch('/api/me');
+      const data = await res.json();
+      if (!res.ok) {
+        SY.showError(errorBox, data.error || 'Could not load settings.');
+        document.getElementById('loading-line').textContent = '';
+        return;
+      }
+      document.getElementById('constituency').value = data.constituency || '';
+      document.getElementById('notify-sms').checked = !!data.notify_sms;
+      document.getElementById('notify-email').checked = !!data.notify_email;
+      document.getElementById('loading-line').style.display = 'none';
+      document.getElementById('settings-form').style.display = 'block';
+    } catch (e) {
+      SY.showError(errorBox, 'Could not reach the server to load settings.');
+      document.getElementById('loading-line').textContent = '';
+    }
+  }
+
+  async function save() {
+    SY.hideError(errorBox);
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const res = await SY.apiFetch('/api/me', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          constituency: document.getElementById('constituency').value.trim(),
+          notify_sms: document.getElementById('notify-sms').checked,
+          notify_email: document.getElementById('notify-email').checked,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        SY.showError(errorBox, data.error || 'Could not save changes.');
+      }
+    } catch (e) {
+      SY.showError(errorBox, 'Could not reach the server to save changes.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save changes';
+    }
+  }
+
+  function signOut() {
+    SY.clearSession();
+    window.location.href = 'splash.html';
+  }
+</script>
+</body>
+</html>

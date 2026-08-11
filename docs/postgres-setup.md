@@ -87,12 +87,26 @@ psql -U sheria_user -d sheria_yangu -c "\dt"
 
 You should see all six tables listed.
 
-## 6. Later: migrating to the DigitalOcean droplet
+## 6. Migrating to the VPS (this is now live, not speculative)
 
-When KamiLimu's droplet Postgres is provisioned, the only change needed is:
+Mark's readiness-check email confirmed every team has now received VPS access
+— so this section is the actual next step for Catherine, not a someday-later
+note anymore.
+
+**Status as of this handoff:** Violet has the schema working against a local
+Postgres (steps 1–5 above, all six tables created and verified with `\dt`).
+Catherine has NOT yet run the same local setup on her own machine, and needs
+to — the `DATABASE_URL` in `.env` is never committed/shared, so this isn't
+something that carries over automatically from Violet's machine. Do steps
+1–5 above on your own machine first, confirm the six tables exist locally,
+*then* do the VPS migration below — that way if something breaks on the VPS,
+you already know the schema itself is fine and the problem is
+connection/environment-specific.
+
+**Migrating once you have the VPS's Postgres details:**
 
 ```
-DATABASE_URL=postgresql://<droplet-user>:<droplet-password>@<droplet-ip>:5432/sheria_yangu
+DATABASE_URL=postgresql://<vps-user>:<vps-password>@<vps-ip>:5432/sheria_yangu
 ```
 
 then re-run `python src/db/init_db.py` once against the new URL to create the same
@@ -100,3 +114,10 @@ tables there. If real data already exists locally by then and needs to move over
 too (not just the empty schema), that's a `pg_dump` / `pg_restore` job — worth
 doing as its own step closer to the actual migration date, not something to solve
 speculatively now.
+
+**Also needed on the VPS, not just Postgres:** the app itself (`src/main.py`)
+needs to actually run there and be reachable on a public URL/port, since
+that's also the URL we owe Mark for the SMS Two-Way callback registration
+(see `docs/TESTING.md` section 5b). Worth doing the Postgres migration and
+the app deployment as one pass rather than two separate ones, since Mark's
+waiting on the callback URL specifically.
