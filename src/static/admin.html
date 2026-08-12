@@ -6,38 +6,58 @@
   <title>Sheria Yangu — Admin Review</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    /* Admin-specific layout only — colors/fonts inherited from style.css */
     .admin-wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px; }
     .admin-login-box { max-width: 360px; margin: 80px auto; }
     .admin-login-box input {
-      width: 100%; padding: 10px; margin-bottom: 12px;
-      border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box;
+      width: 100%; padding: 12px; margin-bottom: 12px;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card); color: var(--ink); box-sizing: border-box;
+    }
+    .admin-login-box button {
+      background: var(--green); color: white; border: none;
+      border-radius: 8px; font-size: 15px; padding: 12px 16px;
+      width: 100%; cursor: pointer;
     }
     .review-card {
-      border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-bottom: 20px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px; margin-bottom: 20px;
+      box-shadow: 0 2px 6px var(--shadow);
     }
-    .review-card h4 { margin: 0 0 8px; }
+    .review-card h4 { margin: 0 0 10px; color: var(--ink); }
     .review-card .raw-text {
-      font-size: 0.85em; color: #555; background: #f7f7f7;
-      padding: 8px; border-radius: 6px; margin-bottom: 10px; white-space: pre-wrap;
+      font-size: 0.85em; color: var(--ink-muted); background: var(--bg);
+      padding: 10px; border-radius: 6px; margin-bottom: 12px; white-space: pre-wrap;
+      border: 1px solid var(--border);
     }
-    .review-card .summary-block { margin-bottom: 10px; }
+    .review-card .summary-block { margin-bottom: 12px; }
+    .review-card .summary-block strong { color: var(--ink); font-size: 0.9em; }
     .review-card .summary-block textarea {
-      width: 100%; min-height: 70px; box-sizing: border-box;
-      padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit;
+      width: 100%; min-height: 70px; box-sizing: border-box; margin-top: 4px;
+      padding: 10px; border-radius: 6px; border: 1px solid var(--border);
+      font-family: inherit; background: var(--bg); color: var(--ink);
     }
-    .review-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .review-actions { display: flex; gap: 8px; margin-top: 12px; }
     .review-actions button {
-      padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;
+      padding: 10px 14px; border-radius: 8px; border: none; cursor: pointer;
+      font-weight: 600; font-size: 14px; flex: 1;
     }
-    .btn-approve { background: #2e7d32; color: white; }
-    .btn-edit { background: #f9a825; color: white; }
-    .btn-reject { background: #c62828; color: white; }
-    .btn-save-edit { background: #1565c0; color: white; }
-    .empty-state { text-align: center; color: #777; padding: 40px 0; }
-    #admin-error { color: #c62828; margin-top: 8px; }
-    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .admin-header button { background: none; border: 1px solid #ccc; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    .btn-approve { background: var(--green); color: white; }
+    .btn-save-edit { background: #2563a8; color: white; }
+    .btn-reject { background: var(--red); color: white; }
+    .empty-state { text-align: center; color: var(--ink-muted); padding: 60px 0; }
+    #admin-error { color: var(--red); margin-top: 8px; font-size: 14px; }
+    .admin-header {
+      background: var(--green); color: white; padding: 16px 20px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin: -24px -16px 20px; border-radius: 0;
+    }
+    .admin-header h2 { margin: 0; font-size: 18px; }
+    .admin-header button {
+      background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;
+    }
+    .admin-login-box h2 { color: var(--ink); }
+    .admin-login-box p { color: var(--ink-muted); }
   </style>
 </head>
 <body>
@@ -138,11 +158,11 @@
           <h4>${item.bill_title} — Clause ${item.clause_number || item.clause_id}</h4>
           <div class="raw-text">${escapeHtml(item.raw_text)}</div>
           <div class="summary-block">
-            <strong>English:</strong>
+            <strong>🇬🇧 English:</strong>
             <textarea id="en-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_en)}</textarea>
           </div>
           <div class="summary-block">
-            <strong>Kiswahili:</strong>
+            <strong>🇰🇪 Kiswahili:</strong>
             <textarea id="sw-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_sw)}</textarea>
           </div>
           <div class="review-actions">
