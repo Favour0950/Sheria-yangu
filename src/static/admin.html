@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sheria Yangu — Admin Review</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* Admin-specific layout only — colors/fonts inherited from style.css */
+    .admin-wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px; }
+    .admin-login-box { max-width: 360px; margin: 80px auto; }
+    .admin-login-box input {
+      width: 100%; padding: 10px; margin-bottom: 12px;
+      border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box;
+    }
+    .review-card {
+      border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-bottom: 20px;
+    }
+    .review-card h4 { margin: 0 0 8px; }
+    .review-card .raw-text {
+      font-size: 0.85em; color: #555; background: #f7f7f7;
+      padding: 8px; border-radius: 6px; margin-bottom: 10px; white-space: pre-wrap;
+    }
+    .review-card .summary-block { margin-bottom: 10px; }
+    .review-card .summary-block textarea {
+      width: 100%; min-height: 70px; box-sizing: border-box;
+      padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-family: inherit;
+    }
+    .review-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .review-actions button {
+      padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600;
+    }
+    .btn-approve { background: #2e7d32; color: white; }
+    .btn-edit { background: #f9a825; color: white; }
+    .btn-reject { background: #c62828; color: white; }
+    .btn-save-edit { background: #1565c0; color: white; }
+    .empty-state { text-align: center; color: #777; padding: 40px 0; }
+    #admin-error { color: #c62828; margin-top: 8px; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .admin-header button { background: none; border: 1px solid #ccc; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <!-- Login screen -->
+  <div id="login-screen" class="admin-wrap admin-login-box">
+    <h2>Sheria Yangu — Admin</h2>
+    <p>Enter the admin password to review pending AI summaries.</p>
+    <input type="password" id="admin-password" placeholder="Admin password" />
+    <button onclick="adminLogin()">Log In</button>
+    <div id="admin-error"></div>
+  </div>
+
+  <!-- Review queue screen (hidden until logged in) -->
+  <div id="review-screen" class="admin-wrap" style="display:none;">
+    <div class="admin-header">
+      <h2>Pending Summary Reviews</h2>
+      <button onclick="adminLogout()">Log Out</button>
+    </div>
+    <div id="review-list"></div>
+  </div>
+
+  <script>
+    const TOKEN_KEY = 'sy_admin_token';
+
+    function getToken() {
+      return localStorage.getItem(TOKEN_KEY);
+    }
+
+    function showLogin() {
+      document.getElementById('login-screen').style.display = 'block';
+      document.getElementById('review-screen').style.display = 'none';
+    }
+
+    function showReview() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('review-screen').style.display = 'block';
+      loadPending();
+    }
+
+    async function adminLogin() {
+      const password = document.getElementById('admin-password').value;
+      const errorBox = document.getElementById('admin-error');
+      errorBox.textContent = '';
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errorBox.textContent = data.error || 'Login failed';
+          return;
+        }
+        localStorage.setItem(TOKEN_KEY, data.access_token);
+        showReview();
+      } catch (e) {
+        errorBox.textContent = 'Could not reach the server.';
+      }
+    }
+
+    function adminLogout() {
+      localStorage.removeItem(TOKEN_KEY);
+      showLogin();
+    }
+
+    async function loadPending() {
+      const list = document.getElementById('review-list');
+      list.innerHTML = '<p>Loading…</p>';
+      try {
+        const res = await fetch('/api/admin/summaries/pending', {
+          headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        const items = await res.json();
+        renderPending(items);
+      } catch (e) {
+        list.innerHTML = '<p class="empty-state">Could not load pending summaries.</p>';
+      }
+    }
+
+    function renderPending(items) {
+      const list = document.getElementById('review-list');
+      list.innerHTML = '';
+      if (items.length === 0) {
+        list.innerHTML = '<div class="empty-state">Nothing pending — all caught up.</div>';
+        return;
+      }
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'review-card';
+        card.id = `card-${item.bill_id}-${item.clause_id}`;
+        card.innerHTML = `
+          <h4>${item.bill_title} — Clause ${item.clause_number || item.clause_id}</h4>
+          <div class="raw-text">${escapeHtml(item.raw_text)}</div>
+          <div class="summary-block">
+            <strong>English:</strong>
+            <textarea id="en-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_en)}</textarea>
+          </div>
+          <div class="summary-block">
+            <strong>Kiswahili:</strong>
+            <textarea id="sw-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_sw)}</textarea>
+          </div>
+          <div class="review-actions">
+            <button class="btn-approve" onclick="reviewClause('${item.bill_id}','${item.clause_id}','approve')">✓ Approve</button>
+            <button class="btn-save-edit" onclick="reviewClause('${item.bill_id}','${item.clause_id}','edit')">💾 Save Edit</button>
+            <button class="btn-reject" onclick="reviewClause('${item.bill_id}','${item.clause_id}','reject')">✗ Reject</button>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    async function reviewClause(billId, clauseId, decision) {
+      const body = { decision };
+      if (decision === 'edit') {
+        body.corrected_summary_en = document.getElementById(`en-${billId}-${clauseId}`).value;
+        body.corrected_summary_sw = document.getElementById(`sw-${billId}-${clauseId}`).value;
+      }
+      try {
+        const res = await fetch(`/api/admin/summaries/${encodeURIComponent(billId)}/${encodeURIComponent(clauseId)}/review`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + getToken(),
+          },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        if (!res.ok) {
+          alert('Something went wrong — try again.');
+          return;
+        }
+        const card = document.getElementById(`card-${billId}-${clauseId}`);
+        if (card) card.remove();
+        const list = document.getElementById('review-list');
+        if (list.children.length === 0) {
+          list.innerHTML = '<div class="empty-state">Nothing pending — all caught up.</div>';
+        }
+      } catch (e) {
+        alert('Could not reach the server.');
+      }
+    }
+
+    // On page load, check if already logged in
+    if (getToken()) {
+      showReview();
+    } else {
+      showLogin();
+    }
+  </script>
+</body>
+</html>

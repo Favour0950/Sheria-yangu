@@ -46,6 +46,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 PEPPER = os.getenv("PEPPER")
 JWT_SECRET = os.getenv("JWT_SECRET")
 SMS_DEV_MODE = os.getenv("SMS_DEV_MODE", "false").lower() == "true"
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_PATH = BASE_DIR / "data" / "sample_bill.json"
@@ -109,6 +110,27 @@ def require_auth(view_func):
         return view_func(*args, **kwargs)
     return wrapper
 
+def require_admin(view_func):
+    """Rejects a request with 401/403 unless it carries a valid admin JWT
+    from /api/admin/login. Separate from require_auth (citizen sessions) —
+    an admin JWT carries {"admin": true} instead of a pseudonymous
+    identity.token, and a citizen's JWT must never pass this check even
+    though both are signed with the same JWT_SECRET."""
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing Authorization: Bearer <admin_token> header — "
+                                      "sign in via /api/admin/login first"}), 401
+        raw_token = auth_header.split(" ", 1)[1].strip()
+        try:
+            payload = jwt.decode(raw_token, JWT_SECRET, algorithms=["HS256"])
+        except jwt.PyJWTError:
+            return jsonify({"error": "Invalid or expired admin token"}), 401
+        if not payload.get("admin"):
+            return jsonify({"error": "This token is not an admin token"}), 403
+        return view_func(*args, **kwargs)
+    return wrapper
 
 def call_deepseek(system_prompt: str, user_prompt: str, max_tokens: int = 400) -> str:
     """Single-turn chat completion call to DeepSeek's OpenAI-compatible API."""
@@ -156,6 +178,32 @@ def index():
 def static_files(path):
     return send_from_directory(FRONTEND_DIR, path)
 
+def _reviewed_path(bill_id: str) -> Path:
+    """Path to a bill's admin-review sidecar file — sits next to the bill's
+    scraped JSON, e.g. data/scraped_bills/<bill_id>.reviewed.json. Keeps
+    admin-verified summaries separate from the scraper's own output so
+    re-running a scraper never wipes out review history."""
+    return SCRAPED_BILLS_DIR / f"{bill_id}.reviewed.json"
+
+
+def _load_reviewed(bill_id: str) -> dict:
+    """Loads a bill's review sidecar file. Returns {} if it doesn't exist
+    yet (normal for a bill nobody has summarized/reviewed)."""
+    path = _reviewed_path(bill_id)
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_reviewed(bill_id: str, data: dict) -> None:
+    """Writes a bill's review sidecar file back to disk."""
+    SCRAPED_BILLS_DIR.mkdir(parents=True, exist_ok=True)
+    with open(_reviewed_path(bill_id), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def _load_scraped_bills() -> list:
     """
@@ -529,13 +577,38 @@ def mark_memorandum_sent(memorandum_id):
 @app.route("/api/summarize", methods=["POST"])
 def summarize_clause():
     """
-    Input:  { "clause_id": str, "raw_text": str, "affected_group": str }
-    Output: { "clause_id": str, "summary_en": str, "summary_sw": str }
+    Input:  { "clause_id": str, "raw_text": str, "affected_group": str, "bill_id": str }
+    Output: { "clause_id": str, "summary_en": str, "summary_sw": str, "verified": bool }
+
+    If bill_id is provided and this clause already has an admin-verified
+    summary in data/scraped_bills/<bill_id>.reviewed.json, that verified
+    version is returned directly and DeepSeek is never called — this is
+    what makes admin corrections actually take effect for citizens.
+
+    Otherwise, DeepSeek is called as before, and the fresh result is saved
+    to the sidecar file as verified: false, so it shows up in the admin
+    review queue. If bill_id is missing (shouldn't happen from clauses.html
+    after this change, but keeps old callers like test_summarize.py and
+    index.html working), summarization still works, it just isn't saved
+    for review.
     """
+    
     payload = request.get_json(force=True)
     clause_id = payload.get("clause_id", "")
     raw_text = payload.get("raw_text", "")
     affected_group = payload.get("affected_group", "the public")
+    bill_id = payload.get("bill_id", "")
+
+    if bill_id and clause_id:
+        reviewed = _load_reviewed(bill_id)
+        entry = reviewed.get(clause_id)
+        if entry and entry.get("verified"):
+            return jsonify({
+                "clause_id": clause_id,
+                "summary_en": entry.get("summary_en", ""),
+                "summary_sw": entry.get("summary_sw", ""),
+                "verified": True,
+            })
 
     # Loosened from the original hackathon-demo version, which forced exactly
     # one 30-word sentence per language — fine for the short demo bill, but
@@ -561,7 +634,6 @@ def summarize_clause():
         f"Group most affected: {affected_group}\n"
         "Simplify this clause for someone with no legal training."
     )
-
     try:
         raw_response = call_deepseek(system_prompt, user_prompt, max_tokens=700)
         summary_en, summary_sw = "", ""
@@ -574,7 +646,25 @@ def summarize_clause():
             # Model didn't follow the format — fall back to raw response for EN
             summary_en = summary_en or raw_response
             summary_sw = summary_sw or "(Tafsiri haikupatikana)"
-        return jsonify({"clause_id": clause_id, "summary_en": summary_en, "summary_sw": summary_sw})
+
+        if bill_id and clause_id:
+            reviewed = _load_reviewed(bill_id)
+            reviewed[clause_id] = {
+                "summary_en": summary_en,
+                "summary_sw": summary_sw,
+                "raw_text": raw_text,
+                "verified": False,
+                "verified_by": None,
+                "verified_at": None,
+            }
+            _save_reviewed(bill_id, reviewed)
+
+        return jsonify({
+            "clause_id": clause_id,
+            "summary_en": summary_en,
+            "summary_sw": summary_sw,
+            "verified": False,
+        })
     except Exception as exc:  # keep the demo alive even if the API call fails
         return jsonify({
             "clause_id": clause_id,
@@ -583,6 +673,126 @@ def summarize_clause():
             "error": str(exc),
         }), 200
 
+@app.route("/api/admin/login", methods=["POST"])
+def admin_login():
+    """
+    Input:  { "password": str }
+    Output: { "access_token": <JWT with admin:true claim>, "token_type": "bearer" }
+
+    Single shared admin password for hackathon scope — see ADMIN_PASSWORD in
+    .env. Not per-admin accounts; that's a real nice-to-have, not required
+    for finals (see docs/admin-review-spec.md).
+    """
+    if not ADMIN_PASSWORD:
+        return jsonify({"error": "ADMIN_PASSWORD is not configured — set it in .env"}), 500
+    if not JWT_SECRET:
+        return jsonify({"error": "JWT_SECRET is not configured"}), 500
+
+    payload = request.get_json(force=True)
+    password = payload.get("password", "")
+    if password != ADMIN_PASSWORD:
+        return jsonify({"error": "Incorrect admin password"}), 401
+
+    access_token = jwt.encode(
+        {"admin": True, "exp": datetime.now() + timedelta(hours=8)},
+        JWT_SECRET, algorithm="HS256",
+    )
+    return jsonify({"access_token": access_token, "token_type": "bearer"})
+
+
+@app.route("/api/admin/summaries/pending", methods=["GET"])
+@require_admin
+def admin_pending_summaries():
+    """
+    Returns every clause across every bill whose summary hasn't been
+    reviewed yet (verified == false in its .reviewed.json sidecar).
+
+    Output: [ { "bill_id": str, "bill_title": str, "clause_id": str,
+                "clause_number": str|None, "raw_text": str,
+                "summary_en": str, "summary_sw": str, "source_url": str|None }, ... ]
+    """
+    pending = []
+    for bill in _load_scraped_bills():
+        bill_id = bill["_id"]
+        reviewed = _load_reviewed(bill_id)
+        clauses_by_id = {c.get("clause_id"): c for c in bill.get("clauses", [])}
+        for clause_id, entry in reviewed.items():
+            if entry.get("verified") or entry.get("rejected"):
+                continue
+            clause = clauses_by_id.get(clause_id, {})
+            pending.append({
+                "bill_id": bill_id,
+                "bill_title": bill.get("title", bill_id),
+                "clause_id": clause_id,
+                "clause_number": clause.get("clause_number"),
+                "raw_text": entry.get("raw_text", clause.get("raw_text", "")),
+                "summary_en": entry.get("summary_en", ""),
+                "summary_sw": entry.get("summary_sw", ""),
+                "source_url": bill.get("source_url"),
+            })
+    return jsonify(pending)
+
+
+@app.route("/api/admin/summaries/<bill_id>/<clause_id>/review", methods=["POST"])
+@require_admin
+def admin_review_summary(bill_id, clause_id):
+    """
+    Input:  { "decision": "approve" | "reject" | "edit",
+              "corrected_summary_en": str (required if decision == "edit"),
+              "corrected_summary_sw": str (required if decision == "edit"),
+              "note": str (optional) }
+    Output: { "status": "verified" | "rejected", "clause_id": str, "bill_id": str }
+
+    approve: marks the existing DeepSeek summary verified as-is.
+    edit:    saves the admin's corrected text, marks it verified — this is
+             what makes a fix actually reach citizens (see the verified-check
+             at the top of /api/summarize).
+    reject:  marks it rejected (verified stays false, but flagged so it's
+             excluded from the pending queue and from being served to
+             citizens) — this clause needs re-summarizing before anyone
+             sees it again. Deleting the entry entirely would just cause it
+             to regenerate identically next time someone views the clause,
+             so a "rejected" flag is used instead of a delete.
+    """
+    payload = request.get_json(force=True)
+    decision = payload.get("decision", "")
+    if decision not in ("approve", "reject", "edit"):
+        return jsonify({"error": "decision must be 'approve', 'reject', or 'edit'"}), 400
+
+    reviewed = _load_reviewed(bill_id)
+    entry = reviewed.get(clause_id)
+    if entry is None:
+        return jsonify({"error": f"No pending summary found for bill '{bill_id}' clause '{clause_id}'"}), 404
+
+    if decision == "edit":
+        corrected_en = payload.get("corrected_summary_en", "")
+        corrected_sw = payload.get("corrected_summary_sw", "")
+        if not corrected_en or not corrected_sw:
+            return jsonify({"error": "corrected_summary_en and corrected_summary_sw are required for an edit"}), 400
+        entry["summary_en"] = corrected_en
+        entry["summary_sw"] = corrected_sw
+        entry["verified"] = True
+        entry["verified_by"] = "admin"
+        entry["verified_at"] = datetime.now().isoformat()
+        entry["note"] = payload.get("note")
+        status = "verified"
+    elif decision == "approve":
+        entry["verified"] = True
+        entry["verified_by"] = "admin"
+        entry["verified_at"] = datetime.now().isoformat()
+        entry["note"] = payload.get("note")
+        status = "verified"
+    else:  # reject
+        entry["verified"] = False
+        entry["rejected"] = True
+        entry["verified_by"] = "admin"
+        entry["verified_at"] = datetime.now().isoformat()
+        entry["note"] = payload.get("note")
+        status = "rejected"
+
+    reviewed[clause_id] = entry
+    _save_reviewed(bill_id, reviewed)
+    return jsonify({"status": status, "clause_id": clause_id, "bill_id": bill_id})
 
 @app.route("/api/auth/request-otp", methods=["POST"])
 def request_otp():
