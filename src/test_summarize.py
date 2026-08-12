@@ -40,10 +40,12 @@ def load_bill(bill_id: str | None) -> dict:
         if not match:
             print(f"No bill with id '{bill_id}'. Available ids: {[f.stem for f in files]}")
             sys.exit(1)
-        return json.loads(match.read_text(encoding="utf-8"))
-    return json.loads(files[0].read_text(encoding="utf-8"))
-
-
+        data = json.loads(match.read_text(encoding="utf-8"))
+        data["_id"] = match.stem
+        return data
+    data = json.loads(files[0].read_text(encoding="utf-8"))
+    data["_id"] = files[0].stem
+    return data
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--bill-id", help="id from /api/bills; defaults to the first scraped bill")
@@ -66,10 +68,13 @@ if __name__ == "__main__":
     print(clause.get("raw_text", "")[:300] + ("..." if len(clause.get("raw_text", "")) > 300 else ""))
     print("\n--- Calling /api/summarize (make sure `python src/main.py` is running) ---\n")
 
+    
+
     resp = requests.post(API_URL, json={
         "clause_id": clause.get("clause_id"),
         "raw_text": clause.get("raw_text"),
         "affected_group": args.affected_group,
+        "bill_id": bill.get("_id"),
     }, timeout=30)
 
     print(f"HTTP {resp.status_code}")

@@ -132,7 +132,7 @@
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clause),
+        body: JSON.stringify({ ...clause, bill_id: billId }),
       });
       const data = await res.json();
       const div = document.getElementById('clause-' + clause.clause_id);
