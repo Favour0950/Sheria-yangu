@@ -158,11 +158,11 @@
           <h4>${item.bill_title} — Clause ${item.clause_number || item.clause_id}</h4>
           <div class="raw-text">${escapeHtml(item.raw_text)}</div>
           <div class="summary-block">
-            <strong>🇬🇧 English:</strong>
+            <strong>English:</strong>
             <textarea id="en-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_en)}</textarea>
           </div>
           <div class="summary-block">
-            <strong>🇰🇪 Kiswahili:</strong>
+            <strong>Kiswahili:</strong>
             <textarea id="sw-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_sw)}</textarea>
           </div>
           <div class="review-actions">

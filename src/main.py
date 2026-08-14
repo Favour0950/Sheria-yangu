@@ -205,6 +205,43 @@ def _save_reviewed(bill_id: str, data: dict) -> None:
     with open(_reviewed_path(bill_id), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+def _bill_verification_status(bill: dict) -> dict:
+    """
+    Checks review completeness for one bill's clauses.
+
+    A clause counts as "needing review" if it has ever been summarized
+    (i.e. it has an entry in the .reviewed.json sidecar) OR has raw_text to
+    summarize at all — a clause nobody has viewed yet still needs review
+    before the bill can be shown to citizens, it just hasn't been generated
+    yet. rejected clauses count as NOT verified (they need a fresh AI pass).
+
+    Returns: {
+      "total_clauses": int,
+      "verified_clauses": int,
+      "fully_verified": bool,   # True only if every clause is verified
+    }
+    A bill with zero clauses (e.g. a 0-clause scrape) is never fully_verified
+    — nothing to show citizens either way, but it shouldn't silently pass as
+    "done" with zero real content.
+    """
+    clauses = bill.get("clauses", [])
+    total = len(clauses)
+    if total == 0:
+        return {"total_clauses": 0, "verified_clauses": 0, "fully_verified": False}
+
+    reviewed = _load_reviewed(bill["_id"])
+    verified_count = 0
+    for clause in clauses:
+        entry = reviewed.get(clause.get("clause_id"))
+        if entry and entry.get("verified"):
+            verified_count += 1
+
+    return {
+        "total_clauses": total,
+        "verified_clauses": verified_count,
+        "fully_verified": verified_count == total,
+    }
+
 def _load_scraped_bills() -> list:
     """
     Loads every bill JSON out of data/scraped_bills/ (written by scraper.py
@@ -218,7 +255,8 @@ def _load_scraped_bills() -> list:
     if not SCRAPED_BILLS_DIR.exists():
         return []
     bills = []
-    for path in sorted(SCRAPED_BILLS_DIR.glob("*.json")):
+    all_json_files = sorted(SCRAPED_BILLS_DIR.glob("*.json"))
+    for path in [p for p in all_json_files if not p.name.endswith(".reviewed.json")]:
         raw_text = None
         # scraper.py/scraper_national.py now always write UTF-8 explicitly, but
         # files written before that fix may be in Windows' default codepage
@@ -248,17 +286,25 @@ def _load_scraped_bills() -> list:
     return bills
 
 
+
+
 @app.route("/api/bills", methods=["GET"])
 def list_bills():
     """
     Lightweight listing for a bill-picker UI — id/title/level/status/year/
     clause count only, NOT full clause text (use /api/bill?id=... for that).
-    Returns every scraped bill regardless of status — this is the general
-    listing, not the open-only one the dashboard should actually render from
-    (see the dedicated open-only endpoint, added separately on purpose so the
-    "only ever show status == open" rule lives in one obvious place).
+
+    As of the pre-publish review change: only returns bills where EVERY
+    clause has been admin-verified (see _bill_verification_status above).
+    A bill sits invisible to citizens the whole time it's being scraped and
+    reviewed — it only appears here the moment the last clause is approved.
+    This is the single filter point for that rule; admin-side endpoints
+    (admin_pending_summaries, the bills-overview endpoint) intentionally
+    bypass this and call _load_scraped_bills() directly, since admins need
+    to see in-progress bills too.
     """
     scraped = _load_scraped_bills()
+    visible = [b for b in scraped if _bill_verification_status(b)["fully_verified"]]
     return jsonify([
         {
             "id": b["_id"],
@@ -269,9 +315,8 @@ def list_bills():
             "source_url": b.get("source_url"),
             "clause_count": len(b.get("clauses", [])),
         }
-        for b in scraped
+        for b in visible
     ])
-
 
 @app.route("/api/bills/open", methods=["GET"])
 def list_open_bills():
@@ -283,17 +328,21 @@ def list_open_bills():
     can never quietly get bypassed by a second copy of the same check drifting
     out of sync.
 
-    Filters to status == "open" only. Right now this will almost always
-    return an empty list, because no scraper (county or national) currently
-    has a way to confirm a real participation window — every scraped bill
-    lands as "needs_manual_review", not "open" (see scraper.py's and
-    scraper_national.py's docstrings). A bill only becomes "open" once
-    something — today, a human editing its JSON/DB row by hand; later,
-    ideally, a confirmed automated source — actually verifies the window is
-    live. An empty list here is the CORRECT, honest behaviour until that
-    exists, not a bug.
+    Filters to status == "open" AND fully_verified (see
+    _bill_verification_status) — a bill only shows here once BOTH its
+    participation window is confirmed live AND every one of its clauses has
+    passed admin review. Right now this will almost always return an empty
+    list, since status == "open" alone was already rare before this change
+    (see scraper.py's and scraper_national.py's docstrings) — adding the
+    verification requirement makes an empty list here even more likely
+    until admins actively review scraped bills. An empty list here is the
+    CORRECT, honest behaviour until both conditions are met, not a bug.
     """
-    scraped = [b for b in _load_scraped_bills() if b.get("status") == "open"]
+    scraped = _load_scraped_bills()
+    visible = [
+        b for b in scraped
+        if b.get("status") == "open" and _bill_verification_status(b)["fully_verified"]
+    ]
     return jsonify([
         {
             "id": b["_id"],
@@ -305,8 +354,25 @@ def list_open_bills():
             "source_url": b.get("source_url"),
             "clause_count": len(b.get("clauses", [])),
         }
-        for b in scraped
+        for b in visible
     ])
+
+def _is_admin_request() -> bool:
+    """Checks for a valid admin bearer token WITHOUT requiring one — used by
+    routes like get_bill() that serve both citizens and the admin dashboard,
+    where citizens get the verified-only view and admins get to see
+    everything including in-progress bills. Unlike require_admin, this never
+    rejects the request; it just reports true/false so the route can decide
+    what to return."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return False
+    raw_token = auth_header.split(" ", 1)[1].strip()
+    try:
+        payload = jwt.decode(raw_token, JWT_SECRET, algorithms=["HS256"])
+        return bool(payload.get("admin"))
+    except jwt.PyJWTError:
+        return False
 
 
 @app.route("/api/bill", methods=["GET"])
@@ -318,25 +384,34 @@ def get_bill():
     scraped bill if any exist yet, otherwise falls back to the original
     mocked sample_bill.json (flagged with "_mocked": true) so the old demo
     frontend and a fresh clone with no scraper output yet don't just break.
+
+    Pre-publish review gate: a citizen (no admin token) requesting a bill
+    that isn't fully_verified gets a 404, exactly as if the bill didn't
+    exist — it genuinely shouldn't be visible to them yet. An admin token
+    (see _is_admin_request) bypasses this, since the admin dashboard needs
+    to show in-progress bills to review them in the first place.
     """
     bill_id = request.args.get("id")
     scraped = _load_scraped_bills()
+    is_admin = _is_admin_request()
 
     if bill_id:
         match = next((b for b in scraped if b["_id"] == bill_id), None)
         if match is None:
             return jsonify({"error": f"No bill found with id '{bill_id}'"}), 404
+        if not is_admin and not _bill_verification_status(match)["fully_verified"]:
+            return jsonify({"error": f"No bill found with id '{bill_id}'"}), 404
         return jsonify(match)
 
-    if scraped:
-        return jsonify(scraped[0])
+    visible = scraped if is_admin else [b for b in scraped if _bill_verification_status(b)["fully_verified"]]
+    if visible:
+        return jsonify(visible[0])
 
     with open(DATA_PATH, "r", encoding="utf-8") as f:
         bill = json.load(f)
     bill["_id"] = "mock"
     bill["_mocked"] = True
     return jsonify(bill)
-
 
 def _find_clause(bill_id: str, clause_id: str) -> tuple[dict | None, dict | None]:
     """Looks up (bill, clause) by id across scraped bills — used to validate a
@@ -793,6 +868,137 @@ def admin_review_summary(bill_id, clause_id):
     reviewed[clause_id] = entry
     _save_reviewed(bill_id, reviewed)
     return jsonify({"status": status, "clause_id": clause_id, "bill_id": bill_id})
+
+@app.route("/api/admin/bills/<bill_id>/generate-summaries", methods=["POST"])
+@require_admin
+def admin_generate_summaries(bill_id):
+    """
+    Proactively summarizes every clause of one bill that doesn't already
+    have a summary — this is the "review before publish" trigger. Without
+    this, a clause only ever gets summarized reactively (someone has to
+    view it first), which doesn't work now that citizens can't see a bill
+    until every clause is verified: nobody would ever generate the first
+    draft for the admin to review. An admin clicks this right after a bill
+    is scraped, populating the whole pending queue for that bill at once.
+
+    Skips any clause that already has an entry in the sidecar (verified,
+    rejected, or still pending) — safe to click more than once, it only
+    fills in genuine gaps rather than re-summarizing everything each time.
+
+    Output: { "bill_id": str, "generated": int, "skipped": int,
+              "total_clauses": int }
+    generated = clauses that got a fresh DeepSeek call this run.
+    skipped   = clauses that already had an entry (any status) and were left alone.
+    """
+    scraped = _load_scraped_bills()
+    bill = next((b for b in scraped if b["_id"] == bill_id), None)
+    if bill is None:
+        return jsonify({"error": f"No bill found with id '{bill_id}'"}), 404
+
+    clauses = bill.get("clauses", [])
+    reviewed = _load_reviewed(bill_id)
+    generated = 0
+    skipped = 0
+
+    system_prompt = (
+        "You simplify Kenyan legislative clauses for ordinary citizens, especially "
+        "people with no legal background. Given a clause of a bill, respond with "
+        "EXACTLY two lines, no preamble, no markdown formatting:\n"
+        "EN: <up to 3 short plain-English sentences (about 90 words total) covering: "
+        "what this clause actually says, who it affects, and what concretely changes "
+        "for the named group. Avoid legal jargon; explain any term you must use.>\n"
+        "SW: <the same explanation in plain Kiswahili, same length limit>"
+    )
+
+    for clause in clauses:
+        clause_id = clause.get("clause_id")
+        if not clause_id or clause_id in reviewed:
+            skipped += 1
+            continue
+
+        raw_text = clause.get("raw_text", "")
+        user_prompt = (
+            f"Clause text: {raw_text}\n"
+            "Group most affected: the public\n"
+            "Simplify this clause for someone with no legal training."
+        )
+        try:
+            raw_response = call_deepseek(system_prompt, user_prompt, max_tokens=700)
+            summary_en, summary_sw = "", ""
+            for line in raw_response.splitlines():
+                if line.strip().upper().startswith("EN:"):
+                    summary_en = line.split(":", 1)[1].strip()
+                elif line.strip().upper().startswith("SW:"):
+                    summary_sw = line.split(":", 1)[1].strip()
+            if not summary_en or not summary_sw:
+                summary_en = summary_en or raw_response
+                summary_sw = summary_sw or "(Tafsiri haikupatikana)"
+        except Exception as exc:
+            summary_en = f"[AI call failed, showing raw clause] {raw_text}"
+            summary_sw = "[Ombi la AI limeshindwa]"
+
+        reviewed[clause_id] = {
+            "summary_en": summary_en,
+            "summary_sw": summary_sw,
+            "raw_text": raw_text,
+            "verified": False,
+            "verified_by": None,
+            "verified_at": None,
+        }
+        generated += 1
+
+    _save_reviewed(bill_id, reviewed)
+    return jsonify({
+        "bill_id": bill_id,
+        "generated": generated,
+        "skipped": skipped,
+        "total_clauses": len(clauses),
+    })
+
+@app.route("/api/admin/bills", methods=["GET"])
+@require_admin
+def admin_bills_overview():
+    """
+    Admin-only bird's-eye view of every scraped bill and its review
+    progress — lets an admin see at a glance which bills still need work,
+    and is the natural entry point for triggering
+    admin_generate_summaries() on a bill that hasn't been touched yet.
+
+    Unlike list_bills()/list_open_bills(), this deliberately shows EVERY
+    scraped bill regardless of verification status — an admin needs to see
+    in-progress bills specifically, since that's the whole point of this
+    view.
+
+    Output: [ { "bill_id": str, "title": str, "level": str|None,
+                "status": str, "source_url": str|None,
+                "total_clauses": int, "verified_clauses": int,
+                "fully_verified": bool }, ... ]
+    Sorted so bills needing the most attention (least reviewed, as a
+    fraction) show up first — a freshly scraped bill with 0 of 12 clauses
+    reviewed surfaces above one sitting at 2 of 3.
+    """
+    bills = _load_scraped_bills()
+    result = []
+    for bill in bills:
+        vstatus = _bill_verification_status(bill)
+        result.append({
+            "bill_id": bill["_id"],
+            "title": bill.get("title", bill["_id"]),
+            "level": bill.get("level"),
+            "status": bill.get("status"),
+            "source_url": bill.get("source_url"),
+            "total_clauses": vstatus["total_clauses"],
+            "verified_clauses": vstatus["verified_clauses"],
+            "fully_verified": vstatus["fully_verified"],
+        })
+
+    def _progress_fraction(item):
+        if item["total_clauses"] == 0:
+            return 1.0  # nothing to review — sorts last, not first
+        return item["verified_clauses"] / item["total_clauses"]
+
+    result.sort(key=_progress_fraction)
+    return jsonify(result)
 
 @app.route("/api/auth/request-otp", methods=["POST"])
 def request_otp():
