@@ -6,7 +6,7 @@
   <title>Sheria Yangu — Admin Review</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    .admin-wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px; }
+    .admin-wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
     .admin-login-box { max-width: 360px; margin: 80px auto; }
     .admin-login-box input {
       width: 100%; padding: 12px; margin-bottom: 12px;
@@ -18,20 +18,72 @@
       border-radius: 8px; font-size: 15px; padding: 12px 16px;
       width: 100%; cursor: pointer;
     }
+    .admin-login-box h2 { color: var(--ink); }
+    .admin-login-box p { color: var(--ink-muted); }
+
+    .admin-header {
+      background: var(--green); color: white; padding: 16px 20px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin: -24px -16px 0; border-radius: 0;
+    }
+    .admin-header h2 { margin: 0; font-size: 18px; }
+    .admin-header button {
+      background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;
+    }
+
+    .admin-nav {
+      display: flex; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .admin-nav button {
+      background: none; border: none; padding: 8px 4px; font-size: 15px;
+      color: var(--ink-muted); cursor: pointer; border-bottom: 2px solid transparent;
+    }
+    .admin-nav button.active { color: var(--green); border-bottom-color: var(--green); font-weight: 600; }
+
+    /* Bills overview */
+    .bill-row {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 6px var(--shadow);
+    }
+    .bill-row h4 { margin: 0 0 6px; color: var(--ink); }
+    .bill-row .bill-meta { font-size: 0.85em; color: var(--ink-muted); margin-bottom: 10px; }
+    .progress-bar-track {
+      height: 8px; background: var(--tag-bg); border-radius: 4px; overflow: hidden; margin-bottom: 10px;
+    }
+    .progress-bar-fill { height: 100%; background: var(--green); }
+    .bill-row-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn-generate {
+      background: var(--green); color: white; border: none; border-radius: 8px;
+      padding: 8px 14px; cursor: pointer; font-weight: 600; font-size: 13px;
+    }
+    .btn-generate:disabled { opacity: 0.6; cursor: default; }
+    .source-link { color: #2563a8; font-size: 13px; text-decoration: underline; }
+    .fully-verified-tag {
+      background: var(--green); color: white; font-size: 12px; padding: 3px 8px;
+      border-radius: 6px; font-weight: 600;
+    }
+
+    /* Review cards — side by side */
     .review-card {
       background: var(--card); border: 1px solid var(--border);
       border-radius: 10px; padding: 16px; margin-bottom: 20px;
       box-shadow: 0 2px 6px var(--shadow);
     }
-    .review-card h4 { margin: 0 0 10px; color: var(--ink); }
-    .review-card .raw-text {
+    .review-card h4 { margin: 0 0 6px; color: var(--ink); }
+    .review-card .source-link { display: inline-block; margin-bottom: 12px; }
+    .review-columns { display: flex; gap: 16px; flex-wrap: wrap; }
+    .review-col { flex: 1; min-width: 260px; }
+    .review-col-label { font-size: 0.8em; font-weight: 600; color: var(--ink-muted); margin-bottom: 6px; text-transform: uppercase; }
+    .raw-text {
       font-size: 0.85em; color: var(--ink-muted); background: var(--bg);
-      padding: 10px; border-radius: 6px; margin-bottom: 12px; white-space: pre-wrap;
-      border: 1px solid var(--border);
+      padding: 10px; border-radius: 6px; white-space: pre-wrap;
+      border: 1px solid var(--border); height: 100%; box-sizing: border-box;
     }
-    .review-card .summary-block { margin-bottom: 12px; }
-    .review-card .summary-block strong { color: var(--ink); font-size: 0.9em; }
-    .review-card .summary-block textarea {
+    .summary-block { margin-bottom: 12px; }
+    .summary-block strong { color: var(--ink); font-size: 0.9em; }
+    .summary-block textarea {
       width: 100%; min-height: 70px; box-sizing: border-box; margin-top: 4px;
       padding: 10px; border-radius: 6px; border: 1px solid var(--border);
       font-family: inherit; background: var(--bg); color: var(--ink);
@@ -46,18 +98,6 @@
     .btn-reject { background: var(--red); color: white; }
     .empty-state { text-align: center; color: var(--ink-muted); padding: 60px 0; }
     #admin-error { color: var(--red); margin-top: 8px; font-size: 14px; }
-    .admin-header {
-      background: var(--green); color: white; padding: 16px 20px;
-      display: flex; justify-content: space-between; align-items: center;
-      margin: -24px -16px 20px; border-radius: 0;
-    }
-    .admin-header h2 { margin: 0; font-size: 18px; }
-    .admin-header button {
-      background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4);
-      border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;
-    }
-    .admin-login-box h2 { color: var(--ink); }
-    .admin-login-box p { color: var(--ink-muted); }
   </style>
 </head>
 <body>
@@ -71,13 +111,18 @@
     <div id="admin-error"></div>
   </div>
 
-  <!-- Review queue screen (hidden until logged in) -->
+  <!-- Main admin screen (hidden until logged in) -->
   <div id="review-screen" class="admin-wrap" style="display:none;">
     <div class="admin-header">
-      <h2>Pending Summary Reviews</h2>
+      <h2>Sheria Yangu — Admin</h2>
       <button onclick="adminLogout()">Log Out</button>
     </div>
-    <div id="review-list"></div>
+    <div class="admin-nav">
+      <button id="nav-bills" onclick="switchTab('bills')">Bills Overview</button>
+      <button id="nav-pending" onclick="switchTab('pending')">Pending Reviews</button>
+    </div>
+    <div id="bills-panel"></div>
+    <div id="pending-panel" style="display:none;"></div>
   </div>
 
   <script>
@@ -95,7 +140,16 @@
     function showReview() {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('review-screen').style.display = 'block';
-      loadPending();
+      switchTab('bills');
+    }
+
+    function switchTab(tab) {
+      document.getElementById('nav-bills').classList.toggle('active', tab === 'bills');
+      document.getElementById('nav-pending').classList.toggle('active', tab === 'pending');
+      document.getElementById('bills-panel').style.display = tab === 'bills' ? 'block' : 'none';
+      document.getElementById('pending-panel').style.display = tab === 'pending' ? 'block' : 'none';
+      if (tab === 'bills') loadBillsOverview();
+      if (tab === 'pending') loadPending();
     }
 
     async function adminLogin() {
@@ -125,9 +179,92 @@
       showLogin();
     }
 
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    // ---------- Bills Overview ----------
+
+    async function loadBillsOverview() {
+      const panel = document.getElementById('bills-panel');
+      panel.innerHTML = '<p>Loading…</p>';
+      try {
+        const res = await fetch('/api/admin/bills', {
+          headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        const bills = await res.json();
+        renderBillsOverview(bills);
+      } catch (e) {
+        panel.innerHTML = '<p class="empty-state">Could not load bills.</p>';
+      }
+    }
+
+    function renderBillsOverview(bills) {
+      const panel = document.getElementById('bills-panel');
+      panel.innerHTML = '';
+      if (bills.length === 0) {
+        panel.innerHTML = '<div class="empty-state">No scraped bills yet.</div>';
+        return;
+      }
+      bills.forEach(bill => {
+        const pct = bill.total_clauses > 0 ? Math.round((bill.verified_clauses / bill.total_clauses) * 100) : 0;
+        const row = document.createElement('div');
+        row.className = 'bill-row';
+        row.id = `bill-row-${bill.bill_id}`;
+        row.innerHTML = `
+          <h4>${escapeHtml(bill.title)} ${bill.fully_verified ? '<span class="fully-verified-tag">Live to citizens</span>' : ''}</h4>
+          <div class="bill-meta">${bill.level || ''} · ${bill.verified_clauses} of ${bill.total_clauses} clauses verified</div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+          <div class="bill-row-actions">
+            <button class="btn-generate" onclick="generateSummaries('${bill.bill_id}', this)" ${bill.fully_verified ? 'disabled' : ''}>
+              ${bill.fully_verified ? 'All reviewed' : 'Generate summaries for review'}
+            </button>
+            ${bill.source_url ? `<a class="source-link" href="${bill.source_url}" target="_blank" rel="noopener">View original bill PDF ↗</a>` : ''}
+          </div>
+        `;
+        panel.appendChild(row);
+      });
+    }
+
+    async function generateSummaries(billId, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Generating…';
+      try {
+        const res = await fetch(`/api/admin/bills/${encodeURIComponent(billId)}/generate-summaries`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Something went wrong.');
+          btn.disabled = false;
+          btn.textContent = 'Generate summaries for review';
+          return;
+        }
+        alert(`Generated ${data.generated} new summar${data.generated === 1 ? 'y' : 'ies'} (${data.skipped} already had one). Check Pending Reviews to approve them.`);
+        loadBillsOverview();
+      } catch (e) {
+        alert('Could not reach the server.');
+        btn.disabled = false;
+        btn.textContent = 'Generate summaries for review';
+      }
+    }
+
+    // ---------- Pending Reviews ----------
+
     async function loadPending() {
-      const list = document.getElementById('review-list');
-      list.innerHTML = '<p>Loading…</p>';
+      const panel = document.getElementById('pending-panel');
+      panel.innerHTML = '<p>Loading…</p>';
       try {
         const res = await fetch('/api/admin/summaries/pending', {
           headers: { 'Authorization': 'Bearer ' + getToken() },
@@ -139,15 +276,15 @@
         const items = await res.json();
         renderPending(items);
       } catch (e) {
-        list.innerHTML = '<p class="empty-state">Could not load pending summaries.</p>';
+        panel.innerHTML = '<p class="empty-state">Could not load pending summaries.</p>';
       }
     }
 
     function renderPending(items) {
-      const list = document.getElementById('review-list');
-      list.innerHTML = '';
+      const panel = document.getElementById('pending-panel');
+      panel.innerHTML = '';
       if (items.length === 0) {
-        list.innerHTML = '<div class="empty-state">Nothing pending — all caught up.</div>';
+        panel.innerHTML = '<div class="empty-state">Nothing pending — all caught up.</div>';
         return;
       }
       items.forEach(item => {
@@ -155,15 +292,24 @@
         card.className = 'review-card';
         card.id = `card-${item.bill_id}-${item.clause_id}`;
         card.innerHTML = `
-          <h4>${item.bill_title} — Clause ${item.clause_number || item.clause_id}</h4>
-          <div class="raw-text">${escapeHtml(item.raw_text)}</div>
-          <div class="summary-block">
-            <strong>English:</strong>
-            <textarea id="en-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_en)}</textarea>
-          </div>
-          <div class="summary-block">
-            <strong>Kiswahili:</strong>
-            <textarea id="sw-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_sw)}</textarea>
+          <h4>${escapeHtml(item.bill_title)} — Clause ${item.clause_number || item.clause_id}</h4>
+          ${item.source_url ? `<a class="source-link" href="${item.source_url}" target="_blank" rel="noopener">View original bill PDF ↗</a>` : ''}
+          <div class="review-columns">
+            <div class="review-col">
+              <div class="review-col-label">Original clause text</div>
+              <div class="raw-text">${escapeHtml(item.raw_text)}</div>
+            </div>
+            <div class="review-col">
+              <div class="review-col-label">AI summary — edit if needed</div>
+              <div class="summary-block">
+                <strong>English:</strong>
+                <textarea id="en-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_en)}</textarea>
+              </div>
+              <div class="summary-block">
+                <strong>Kiswahili:</strong>
+                <textarea id="sw-${item.bill_id}-${item.clause_id}">${escapeHtml(item.summary_sw)}</textarea>
+              </div>
+            </div>
           </div>
           <div class="review-actions">
             <button class="btn-approve" onclick="reviewClause('${item.bill_id}','${item.clause_id}','approve')">✓ Approve</button>
@@ -171,14 +317,8 @@
             <button class="btn-reject" onclick="reviewClause('${item.bill_id}','${item.clause_id}','reject')">✗ Reject</button>
           </div>
         `;
-        list.appendChild(card);
+        panel.appendChild(card);
       });
-    }
-
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str || '';
-      return div.innerHTML;
     }
 
     async function reviewClause(billId, clauseId, decision) {
@@ -206,9 +346,9 @@
         }
         const card = document.getElementById(`card-${billId}-${clauseId}`);
         if (card) card.remove();
-        const list = document.getElementById('review-list');
-        if (list.children.length === 0) {
-          list.innerHTML = '<div class="empty-state">Nothing pending — all caught up.</div>';
+        const panel = document.getElementById('pending-panel');
+        if (panel.children.length === 0) {
+          panel.innerHTML = '<div class="empty-state">Nothing pending — all caught up.</div>';
         }
       } catch (e) {
         alert('Could not reach the server.');
