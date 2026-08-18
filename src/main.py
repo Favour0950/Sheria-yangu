@@ -924,6 +924,41 @@ def admin_generate_summaries(bill_id):
     return jsonify({"generated": generated, "skipped": skipped, "failed": failed})
 
 
+@app.route("/api/admin/bills/<bill_id>/review-status", methods=["GET"])
+@require_admin
+def admin_bill_review_status(bill_id):
+    """
+    Output: { "total_clauses": int, "verified": int, "pending": int, "rejected": int }
+
+    Exists because generate-summaries' "skipped" count is ambiguous — it only
+    means "this clause already has a review-queue entry," not "already
+    approved." That confused a real test: a bill whose clauses were all
+    summarized in an earlier session showed "skipped 45" with no way to tell
+    whether those 45 were already verified or still sitting unreviewed. This
+    gives admin.html an unambiguous "X/Y clauses reviewed" count per bill
+    instead of guessing from that.
+    """
+    bill = next((b for b in _load_scraped_bills() if b["_id"] == bill_id), None)
+    if bill is None:
+        return jsonify({"error": f"No bill found with id '{bill_id}'"}), 404
+
+    reviewed = _load_reviewed(bill_id)
+    total = len(bill.get("clauses", []))
+    verified = pending = rejected = 0
+    for clause in bill.get("clauses", []):
+        entry = reviewed.get(clause.get("clause_id"))
+        if not entry:
+            pending += 1
+        elif entry.get("verified"):
+            verified += 1
+        elif entry.get("rejected"):
+            rejected += 1
+        else:
+            pending += 1
+
+    return jsonify({"total_clauses": total, "verified": verified, "pending": pending, "rejected": rejected})
+
+
 @app.route("/api/admin/bills/<bill_id>/publish", methods=["POST"])
 @require_admin
 def admin_publish_bill(bill_id):

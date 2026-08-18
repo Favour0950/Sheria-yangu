@@ -284,6 +284,7 @@
         let bodyHtml = `
           <h4>${escapeHtml(bill.title || bill.id)}</h4>
           <span class="bill-status ${statusClass}">${statusLabel}</span>
+          <div id="review-status-${bill.id}" style="font-size:0.85em;color:#555;margin-bottom:8px;">Checking review status…</div>
         `;
         if (bill.status === 'open') {
           bodyHtml += `
@@ -324,7 +325,42 @@
         }
         card.innerHTML = bodyHtml;
         list.appendChild(card);
+        loadReviewStatus(bill.id);
       });
+    }
+
+    async function loadReviewStatus(billId) {
+      const el = document.getElementById(`review-status-${billId}`);
+      if (!el) return;
+      try {
+        const res = await fetch(`/api/admin/bills/${encodeURIComponent(billId)}/review-status`, {
+          headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok) {
+          el.textContent = '';
+          return;
+        }
+        if (data.total_clauses === 0) {
+          el.textContent = 'No clauses on this bill.';
+        } else if (data.verified === data.total_clauses) {
+          el.textContent = `✓ ${data.verified}/${data.total_clauses} clauses reviewed — ready to publish.`;
+          el.style.color = '#2e7d32';
+        } else {
+          el.textContent = `${data.verified}/${data.total_clauses} clauses reviewed` +
+            (data.pending ? ` (${data.pending} pending` : '') +
+            (data.rejected ? `${data.pending ? ', ' : ' ('}${data.rejected} rejected` : '') +
+            ((data.pending || data.rejected) ? ')' : '') +
+            ' — check Summary Reviews.';
+          el.style.color = '#b5750a';
+        }
+      } catch (e) {
+        el.textContent = '';
+      }
     }
 
     async function generateSummaries(billId) {
@@ -345,8 +381,12 @@
           return;
         }
         const failedNote = data.failed && data.failed.length ? `, ${data.failed.length} failed` : '';
-        statusEl.textContent = `Generated ${data.generated}, skipped ${data.skipped}${failedNote}. ` +
+        const skippedNote = data.skipped
+          ? ` (${data.skipped} already had a queue entry from before — see the review status above for whether those are approved yet)`
+          : '';
+        statusEl.textContent = `Generated ${data.generated} new${skippedNote}${failedNote}. ` +
           `Go review them in the Summary Reviews tab.`;
+        loadReviewStatus(billId);
       } catch (e) {
         statusEl.textContent = 'Could not reach the server.';
       }
