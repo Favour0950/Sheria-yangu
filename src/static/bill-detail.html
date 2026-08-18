@@ -33,37 +33,24 @@
 
   async function loadBills() {
     try {
-      // /api/bills/open is the one true "safe to show as open" source (see
-      // main.py's list_open_bills docstring). It will very likely be empty
-      // right now — no scraper can confirm a real participation window yet —
-      // so fall back to the general listing with an honest "pending review"
-      // label rather than showing a blank screen with no explanation.
+      // /api/bills/open is the ONLY source this screen trusts (see main.py's
+      // list_open_bills docstring) — a bill that's scraped but not yet
+      // published open by an admin, or whose window has already closed, must
+      // never reach a real citizen here. No fallback to the general /api/bills
+      // listing on purpose: an unreviewed bill being visible to the public
+      // was a real gap, not a feature, and admin.html's Bills tab is where
+      // pending bills belong until an admin explicitly publishes them.
       let res = await SY.apiFetch('/api/bills/open', {}, { redirectOn401: false });
       let bills = await res.json();
-      let openOnly = true;
-
-      if (!Array.isArray(bills) || bills.length === 0) {
-        res = await SY.apiFetch('/api/bills', {}, { redirectOn401: false });
-        bills = await res.json();
-        openOnly = false;
-      }
 
       if (!Array.isArray(bills) || bills.length === 0) {
         statusLine.textContent = '';
-        listEl.innerHTML = '<div class="empty-state">No bills have been scraped yet on this machine. ' +
-          'Run the scrapers (see docs/TESTING.md section 4), then reload this page.</div>';
+        listEl.innerHTML = '<div class="empty-state">No bills are currently open for public participation. ' +
+          'Check back soon.</div>';
         return;
       }
 
-      // The "showing pending-review bills" caveat line was removed here per
-      // request — when nothing is confirmed open yet, the screen now just
-      // lists the scraped bills with no explanatory banner above them. The
-      // per-card "Pending confirmation of an open participation window" tag
-      // (via SY.friendlyStatus below) still shows on each card, so the real
-      // status isn't hidden — just not repeated as a top banner.
-      statusLine.textContent = openOnly
-        ? `${bills.length} bill(s) confirmed open for public participation.`
-        : '';
+      statusLine.textContent = `${bills.length} bill(s) confirmed open for public participation.`;
 
       listEl.innerHTML = '';
       bills.forEach(bill => {
@@ -73,8 +60,7 @@
         div.innerHTML = `
           <span class="tag ${levelClass}">${bill.level || 'unknown level'}${bill.year ? ' · ' + bill.year : ''}</span>
           <h3>${bill.title || 'Untitled bill'}</h3>
-          <p>${bill.clause_count || 0} clause(s) scraped
-             ${openOnly ? '' : ' · ' + SY.friendlyStatus(bill.status)}</p>
+          <p>${bill.clause_count || 0} clause(s) scraped</p>
           <button class="primary" style="margin-top:10px;" onclick="selectBill('${bill.id}')">View this bill →</button>
         `;
         listEl.appendChild(div);

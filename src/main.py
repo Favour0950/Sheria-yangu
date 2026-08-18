@@ -283,6 +283,29 @@ def list_bills():
     ])
 
 
+def _is_currently_open(bill: dict) -> bool:
+    """
+    True only if status == "open" AND today is on/before closes_at (when
+    closes_at is a valid "YYYY-MM-DD" string). Added because the publish
+    route only ever sets status once, at publish time — nothing was
+    re-checking it afterward, so a bill whose participation window had
+    genuinely ended would still show as "open" forever until an admin
+    manually revisited it. A bill missing/unparsable closes_at is treated as
+    still open rather than excluded, since publish_bill() always requires
+    both dates going forward — an unparsable date on an older/hand-edited
+    entry shouldn't silently hide a bill that was deliberately marked open.
+    """
+    if bill.get("status") != "open":
+        return False
+    closes_at = bill.get("closes_at")
+    if not closes_at:
+        return True
+    try:
+        return datetime.strptime(closes_at, "%Y-%m-%d").date() >= datetime.now().date()
+    except ValueError:
+        return True
+
+
 @app.route("/api/bills/open", methods=["GET"])
 def list_open_bills():
     """
@@ -293,17 +316,18 @@ def list_open_bills():
     can never quietly get bypassed by a second copy of the same check drifting
     out of sync.
 
-    Filters to status == "open" only. Right now this will almost always
-    return an empty list, because no scraper (county or national) currently
-    has a way to confirm a real participation window — every scraped bill
-    lands as "needs_manual_review", not "open" (see scraper.py's and
+    Filters to status == "open" AND not yet past its closes_at date (see
+    _is_currently_open above). Right now this will almost always return an
+    empty list, because no scraper (county or national) currently has a way
+    to confirm a real participation window — every scraped bill lands as
+    "needs_manual_review", not "open" (see scraper.py's and
     scraper_national.py's docstrings). A bill only becomes "open" once
-    something — today, a human editing its JSON/DB row by hand; later,
-    ideally, a confirmed automated source — actually verifies the window is
-    live. An empty list here is the CORRECT, honest behaviour until that
-    exists, not a bug.
+    something — today, a human editing its JSON/DB row by hand via the admin
+    publish route; later, ideally, a confirmed automated source — actually
+    verifies the window is live. An empty list here is the CORRECT, honest
+    behaviour until that exists, not a bug.
     """
-    scraped = [b for b in _load_scraped_bills() if b.get("status") == "open"]
+    scraped = [b for b in _load_scraped_bills() if _is_currently_open(b)]
     return jsonify([
         {
             "id": b["_id"],
@@ -584,6 +608,84 @@ def mark_memorandum_sent(memorandum_id):
         session.close()
 
 
+# Shared prompt for simplifying one clause — used by both /api/summarize
+# (on-demand, one clause at a time, triggered by a citizen viewing it) and
+# _generate_summary_for_clause below (admin bulk pre-generation, triggered
+# before a bill can be published — see admin_publish_bill's review-completeness
+# check). Loosened from the original hackathon-demo version, which forced
+# exactly one 30-word sentence per language — fine for the short demo bill,
+# but real bill clauses (some 1500+ characters, dense legal/financial detail)
+# lose meaning when compressed that hard. Now allows up to 3 sentences, ~90
+# words, per language. DeepSeek doesn't always respect the word cap exactly.
+_CLAUSE_SUMMARY_SYSTEM_PROMPT = (
+    "You simplify Kenyan legislative clauses for ordinary citizens, especially "
+    "people with no legal background. Given a clause of a bill, respond with "
+    "EXACTLY two lines, no preamble, no markdown formatting:\n"
+    "EN: <up to 3 short plain-English sentences (about 90 words total) covering: "
+    "what this clause actually says, who it affects, and what concretely changes "
+    "for the named group. Avoid legal jargon; explain any term you must use.>\n"
+    "SW: <the same explanation in plain Kiswahili, same length limit>"
+)
+
+
+def _call_and_parse_summary(raw_text: str, affected_group: str = "the public") -> tuple[str, str]:
+    """
+    Calls DeepSeek for one clause and parses the EN:/SW: response. Does NOT
+    save anything — pure call+parse, used by _generate_summary_for_clause
+    below (which adds the save step) and directly by /api/summarize's legacy
+    no-bill_id path (which must NOT write a sidecar file, since without a
+    real bill_id there's nowhere legitimate to save it).
+
+    Raises whatever call_deepseek raises on failure.
+    """
+    user_prompt = (
+        f"Clause text: {raw_text}\n"
+        f"Group most affected: {affected_group}\n"
+        "Simplify this clause for someone with no legal training."
+    )
+    raw_response = call_deepseek(_CLAUSE_SUMMARY_SYSTEM_PROMPT, user_prompt, max_tokens=700)
+    summary_en, summary_sw = "", ""
+    for line in raw_response.splitlines():
+        if line.strip().upper().startswith("EN:"):
+            summary_en = line.split(":", 1)[1].strip()
+        elif line.strip().upper().startswith("SW:"):
+            summary_sw = line.split(":", 1)[1].strip()
+    if not summary_en or not summary_sw:
+        # Model didn't follow the format — fall back to raw response for EN
+        summary_en = summary_en or raw_response
+        summary_sw = summary_sw or "(Tafsiri haikupatikana)"
+    return summary_en, summary_sw
+
+
+def _generate_summary_for_clause(bill_id: str, clause_id: str, raw_text: str,
+                                  affected_group: str = "the public") -> dict:
+    """
+    Calls DeepSeek once for one clause (via _call_and_parse_summary) and
+    saves the result to data/scraped_bills/<bill_id>.reviewed.json as an
+    unverified (pending-review) entry. Shared by /api/summarize's on-demand
+    path (bill_id/clause_id present) and the admin bulk-generate endpoint
+    below, so there's exactly one place that builds the prompt and
+    parses/saves the result.
+
+    Raises whatever call_deepseek raises on failure — callers decide how to
+    handle that (an on-demand single call vs. a bulk loop need different
+    error handling, so this doesn't swallow exceptions itself).
+    """
+    summary_en, summary_sw = _call_and_parse_summary(raw_text, affected_group)
+    entry = {
+        "summary_en": summary_en,
+        "summary_sw": summary_sw,
+        "raw_text": raw_text,
+        "verified": False,
+        "verified_by": None,
+        "verified_at": None,
+    }
+    reviewed = _load_reviewed(bill_id)
+    reviewed[clause_id] = entry
+    _save_reviewed(bill_id, reviewed)
+    return entry
+
+
 @app.route("/api/summarize", methods=["POST"])
 def summarize_clause():
     """
@@ -595,14 +697,13 @@ def summarize_clause():
     version is returned directly and DeepSeek is never called — this is
     what makes admin corrections actually take effect for citizens.
 
-    Otherwise, DeepSeek is called as before, and the fresh result is saved
-    to the sidecar file as verified: false, so it shows up in the admin
-    review queue. If bill_id is missing (shouldn't happen from clauses.html
-    after this change, but keeps old callers like test_summarize.py and
-    index.html working), summarization still works, it just isn't saved
-    for review.
+    Otherwise, DeepSeek is called as before (via _generate_summary_for_clause),
+    and the fresh result is saved to the sidecar file as verified: false, so
+    it shows up in the admin review queue. If bill_id is missing (shouldn't
+    happen from clauses.html after this change, but keeps old callers like
+    test_summarize.py and index.html working), summarization still works, it
+    just isn't saved for review.
     """
-    
     payload = request.get_json(force=True)
     clause_id = payload.get("clause_id", "")
     raw_text = payload.get("raw_text", "")
@@ -620,55 +721,18 @@ def summarize_clause():
                 "verified": True,
             })
 
-    # Loosened from the original hackathon-demo version, which forced exactly
-    # one 30-word sentence per language — fine for the short demo bill, but
-    # real bill clauses (some 1500+ characters, dense legal/financial detail)
-    # lose meaning when compressed that hard. Now allows up to 3 sentences,
-    # ~90 words, per language — still a real simplification, not a rewrite of
-    # the clause, but with room for "what it says" + "who it affects" + "what
-    # changes for them" as three distinct, short sentences instead of one
-    # over-compressed one. Re-verify actual output against real scraped
-    # clauses (not just the demo bill) before trusting this for the pitch —
-    # DeepSeek doesn't always respect a word cap exactly.
-    system_prompt = (
-        "You simplify Kenyan legislative clauses for ordinary citizens, especially "
-        "people with no legal background. Given a clause of a bill, respond with "
-        "EXACTLY two lines, no preamble, no markdown formatting:\n"
-        "EN: <up to 3 short plain-English sentences (about 90 words total) covering: "
-        "what this clause actually says, who it affects, and what concretely changes "
-        "for the named group. Avoid legal jargon; explain any term you must use.>\n"
-        "SW: <the same explanation in plain Kiswahili, same length limit>"
-    )
-    user_prompt = (
-        f"Clause text: {raw_text}\n"
-        f"Group most affected: {affected_group}\n"
-        "Simplify this clause for someone with no legal training."
-    )
     try:
-        raw_response = call_deepseek(system_prompt, user_prompt, max_tokens=700)
-        summary_en, summary_sw = "", ""
-        for line in raw_response.splitlines():
-            if line.strip().upper().startswith("EN:"):
-                summary_en = line.split(":", 1)[1].strip()
-            elif line.strip().upper().startswith("SW:"):
-                summary_sw = line.split(":", 1)[1].strip()
-        if not summary_en or not summary_sw:
-            # Model didn't follow the format — fall back to raw response for EN
-            summary_en = summary_en or raw_response
-            summary_sw = summary_sw or "(Tafsiri haikupatikana)"
-
         if bill_id and clause_id:
-            reviewed = _load_reviewed(bill_id)
-            reviewed[clause_id] = {
-                "summary_en": summary_en,
-                "summary_sw": summary_sw,
-                "raw_text": raw_text,
+            entry = _generate_summary_for_clause(bill_id, clause_id, raw_text, affected_group)
+            return jsonify({
+                "clause_id": clause_id,
+                "summary_en": entry["summary_en"],
+                "summary_sw": entry["summary_sw"],
                 "verified": False,
-                "verified_by": None,
-                "verified_at": None,
-            }
-            _save_reviewed(bill_id, reviewed)
+            })
 
+        # No bill_id/clause_id (legacy callers) — summarize without saving anything.
+        summary_en, summary_sw = _call_and_parse_summary(raw_text, affected_group)
         return jsonify({
             "clause_id": clause_id,
             "summary_en": summary_en,
@@ -816,6 +880,50 @@ def _bill_path(bill_id: str) -> Path | None:
     return match if match.exists() else None
 
 
+@app.route("/api/admin/bills/<bill_id>/generate-summaries", methods=["POST"])
+@require_admin
+def admin_generate_summaries(bill_id):
+    """
+    Bulk-generates AI summaries for every clause of a bill that doesn't
+    already have a reviewed.json entry — the prerequisite step before a bill
+    can pass admin_publish_bill's review-completeness check below, since
+    normally a clause only gets summarized on-demand when a citizen views it,
+    and citizens can never reach an unpublished bill's clauses to trigger
+    that. This is how an admin gets something into the Summary Reviews queue
+    for a bill nobody's looked at yet.
+
+    Skips any clause that already has an entry (verified, still pending, or
+    rejected) — safe/cheap to re-run, never overwrites an existing admin
+    edit or a citizen-triggered summary already sitting in the queue.
+
+    Runs clauses SERIALLY and catches per-clause failures so one bad
+    DeepSeek call doesn't abort the whole batch. A bill with many clauses
+    (the Finance Bill has 45) can take a while and may hit a gunicorn worker
+    timeout on a slow connection — for the demo, prefer a small bill (the
+    Supplementary Appropriation Bill has 3).
+
+    Output: { "generated": int, "skipped": int, "failed": [ {clause_id, error}, ... ] }
+    """
+    bill = next((b for b in _load_scraped_bills() if b["_id"] == bill_id), None)
+    if bill is None:
+        return jsonify({"error": f"No bill found with id '{bill_id}'"}), 404
+
+    reviewed = _load_reviewed(bill_id)
+    generated, skipped, failed = 0, 0, []
+    for clause in bill.get("clauses", []):
+        clause_id = clause.get("clause_id")
+        if clause_id in reviewed:
+            skipped += 1
+            continue
+        try:
+            _generate_summary_for_clause(bill_id, clause_id, clause.get("raw_text", ""))
+            generated += 1
+        except Exception as exc:
+            failed.append({"clause_id": clause_id, "error": str(exc)})
+
+    return jsonify({"generated": generated, "skipped": skipped, "failed": failed})
+
+
 @app.route("/api/admin/bills/<bill_id>/publish", methods=["POST"])
 @require_admin
 def admin_publish_bill(bill_id):
@@ -841,10 +949,34 @@ def admin_publish_bill(bill_id):
     closes_at must be strictly after opens_at. Both are stored as plain
     "YYYY-MM-DD" strings, matching every other date already in
     scraped_bills/*.json.
+
+    REVIEW GATE: every clause on this bill must have a verified:true entry
+    in its reviewed.json sidecar before this will succeed — citizens must
+    never see a summary no admin has actually checked. Run
+    /api/admin/bills/<bill_id>/generate-summaries first to get clauses into
+    the review queue (admin.html's Summary Reviews tab), approve/edit every
+    one there, then publish. A bill with zero clauses has nothing to
+    require, so it passes trivially.
     """
     path = _bill_path(bill_id)
     if path is None:
         return jsonify({"error": f"No bill found with id '{bill_id}'"}), 404
+
+    with open(path, "r", encoding="utf-8") as f:
+        bill = json.load(f)
+
+    reviewed = _load_reviewed(bill_id)
+    unreviewed_clause_ids = [
+        clause.get("clause_id") for clause in bill.get("clauses", [])
+        if not (reviewed.get(clause.get("clause_id")) or {}).get("verified")
+    ]
+    if unreviewed_clause_ids:
+        return jsonify({
+            "error": "This bill has clauses that haven't been admin-reviewed yet. "
+                     "Generate summaries (if not done already) and approve/edit every "
+                     "one in Summary Reviews before publishing.",
+            "unreviewed_clause_ids": unreviewed_clause_ids,
+        }), 400
 
     payload = request.get_json(force=True)
     opens_at = (payload.get("opens_at") or "").strip()
@@ -859,9 +991,6 @@ def admin_publish_bill(bill_id):
         return jsonify({"error": "opens_at and closes_at must be in 'YYYY-MM-DD' format"}), 400
     if closes_dt <= opens_dt:
         return jsonify({"error": "closes_at must be after opens_at"}), 400
-
-    with open(path, "r", encoding="utf-8") as f:
-        bill = json.load(f)
 
     bill["status"] = "open"
     bill["opens_at"] = opens_at

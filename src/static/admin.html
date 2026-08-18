@@ -302,6 +302,12 @@
           `;
         } else {
           bodyHtml += `
+            <div style="margin-bottom:8px;">
+              <button onclick="generateSummaries('${bill.id}')" style="padding:6px 12px;border-radius:6px;border:1px solid #ccc;background:#f2f2f2;cursor:pointer;">
+                Generate summaries for review
+              </button>
+              <span id="gen-status-${bill.id}" style="font-size:0.8em;color:#555;margin-left:8px;"></span>
+            </div>
             <div class="publish-row">
               <div>
                 <label>Opens at</label>
@@ -313,6 +319,7 @@
               </div>
               <button onclick="publishBill('${bill.id}')">Publish as open</button>
             </div>
+            <div id="publish-error-${bill.id}" style="color:#c62828;font-size:0.8em;margin-top:6px;"></div>
           `;
         }
         card.innerHTML = bodyHtml;
@@ -320,9 +327,36 @@
       });
     }
 
+    async function generateSummaries(billId) {
+      const statusEl = document.getElementById(`gen-status-${billId}`);
+      statusEl.textContent = 'Generating… this can take a while for a bill with many clauses.';
+      try {
+        const res = await fetch(`/api/admin/bills/${encodeURIComponent(billId)}/generate-summaries`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.textContent = data.error || 'Something went wrong.';
+          return;
+        }
+        const failedNote = data.failed && data.failed.length ? `, ${data.failed.length} failed` : '';
+        statusEl.textContent = `Generated ${data.generated}, skipped ${data.skipped}${failedNote}. ` +
+          `Go review them in the Summary Reviews tab.`;
+      } catch (e) {
+        statusEl.textContent = 'Could not reach the server.';
+      }
+    }
+
     async function publishBill(billId) {
       const errorBox = document.getElementById('bills-error');
+      const perBillError = document.getElementById(`publish-error-${billId}`);
       errorBox.textContent = '';
+      if (perBillError) perBillError.textContent = '';
       const opensAt = document.getElementById(`opens-${billId}`).value;
       const closesAt = document.getElementById(`closes-${billId}`).value;
       if (!opensAt || !closesAt) {
@@ -344,7 +378,15 @@
         }
         const data = await res.json();
         if (!res.ok) {
-          errorBox.textContent = data.error || 'Something went wrong — try again.';
+          let msg = data.error || 'Something went wrong — try again.';
+          if (data.unreviewed_clause_ids && data.unreviewed_clause_ids.length) {
+            msg += ` (${data.unreviewed_clause_ids.length} clause(s) still pending: ${data.unreviewed_clause_ids.join(', ')})`;
+          }
+          if (perBillError) {
+            perBillError.textContent = msg;
+          } else {
+            errorBox.textContent = msg;
+          }
           return;
         }
         loadBills();
