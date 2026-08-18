@@ -187,8 +187,12 @@
         const card = document.createElement('div');
         card.className = 'review-card';
         card.id = `card-${item.bill_id}-${item.clause_id}`;
+        const sourceLink = item.source_url
+          ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noopener" style="font-size:0.85em;">View original bill PDF →</a>`
+          : `<span style="font-size:0.85em;color:#999;">No source PDF link on file</span>`;
         card.innerHTML = `
           <h4>${item.bill_title} — Clause ${item.clause_number || item.clause_id}</h4>
+          <div style="margin-bottom:8px;">${sourceLink}</div>
           <div class="raw-text">${escapeHtml(item.raw_text)}</div>
           <div class="summary-block">
             <strong>English:</strong>

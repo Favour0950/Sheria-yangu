@@ -165,13 +165,15 @@ def call_deepseek(system_prompt: str, user_prompt: str, max_tokens: int = 400) -
 @app.route("/")
 def index():
     """
-    Root now points at the new approved flow (splash.html), not the old
-    3-screen hackathon demo — that demo predates the real screens built this
-    session and was only ever kept for backward compatibility, not as the
-    thing a fresh visit to localhost:5000 should show. The old demo is still
-    reachable directly at /index.html if you specifically want it.
+    Root now serves welcome.html — the public marketing landing page (hero,
+    problem statement, how-it-works, team, etc.) — since a bare visit to the
+    live domain is a first-time visitor, not someone mid-flow in the app.
+    Its own "Get started" button links to /splash.html, which is still the
+    real entry point into the actual app (sign-in → OTP → bill list) and
+    stays reachable directly at that path either way. The old 3-screen
+    hackathon demo is still reachable directly at /index.html too.
     """
-    return send_from_directory(FRONTEND_DIR, "splash.html")
+    return send_from_directory(FRONTEND_DIR, "welcome.html")
 
 
 @app.route("/<path:path>")
