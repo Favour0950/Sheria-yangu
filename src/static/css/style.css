@@ -39,9 +39,23 @@ body {
   margin: 0;
 }
 
+/* Vertically centers the phone-card screens (splash, sign-in, OTP, etc.) on
+   tall viewports — previously `margin: 24px auto` only centered horizontally,
+   so on a real phone the card sat pinned near the top with empty space below
+   it. Scoped with :has() to ONLY pages that actually contain a .phone
+   element, so it doesn't affect welcome.html's full-width scrolling layout,
+   which reuses this same stylesheet but isn't a single-card screen. */
+body:has(.phone) {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .phone {
   position: relative; /* anchors the hamburger/drawer/overlay below */
   max-width: 420px;
+  width: 100%;
   margin: 24px auto;
   background: var(--card);
   border-radius: 20px;

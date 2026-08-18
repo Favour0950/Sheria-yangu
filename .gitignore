@@ -16,3 +16,14 @@ data/*
 dist/
 build/
 *.egg-info/
+
+# Internal/sensitive docs — kept locally and shared directly with the team,
+# not pushed to the public repo. Everything else in docs/ (BUILD_CHECKLIST.md,
+# architecture.png, TESTING.md, admin-review-backend-spec.md,
+# problem-statement.md) stays tracked on purpose.
+docs/slides/
+docs/architecture.md
+docs/dr-c-feedback-answers.md
+docs/erd-and-security.md
+docs/pitch-script-v7-slides-and-narration.md
+docs/postgres-setup.md

@@ -55,9 +55,15 @@
         return;
       }
 
+      // The "showing pending-review bills" caveat line was removed here per
+      // request — when nothing is confirmed open yet, the screen now just
+      // lists the scraped bills with no explanatory banner above them. The
+      // per-card "Pending confirmation of an open participation window" tag
+      // (via SY.friendlyStatus below) still shows on each card, so the real
+      // status isn't hidden — just not repeated as a top banner.
       statusLine.textContent = openOnly
         ? `${bills.length} bill(s) confirmed open for public participation.`
-        : `No bill has a confirmed open participation window yet — showing all ${bills.length} scraped bill(s) pending review.`;
+        : '';
 
       listEl.innerHTML = '';
       bills.forEach(bill => {

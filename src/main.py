@@ -219,6 +219,14 @@ def _load_scraped_bills() -> list:
         return []
     bills = []
     for path in sorted(SCRAPED_BILLS_DIR.glob("*.json")):
+        # *.json also matches this bill's own *.reviewed.json sidecar (see
+        # _reviewed_path above) — without this skip, every reviewed bill grew
+        # a second "ghost" entry here with every field null, since the
+        # sidecar has no title/status/level of its own. Caught by actually
+        # hitting /api/bills against real data while testing the publish
+        # route below, not by inspection.
+        if path.name.endswith(".reviewed.json"):
+            continue
         raw_text = None
         # scraper.py/scraper_national.py now always write UTF-8 explicitly, but
         # files written before that fix may be in Windows' default codepage
@@ -793,6 +801,75 @@ def admin_review_summary(bill_id, clause_id):
     reviewed[clause_id] = entry
     _save_reviewed(bill_id, reviewed)
     return jsonify({"status": status, "clause_id": clause_id, "bill_id": bill_id})
+
+
+def _bill_path(bill_id: str) -> Path | None:
+    """Finds a scraped bill's JSON file on disk by its _id (== filename stem).
+    _load_scraped_bills() returns bills as plain dicts with no path attached,
+    so this re-derives it — used by the admin publish route below, which
+    needs to edit one bill's file in place."""
+    if not SCRAPED_BILLS_DIR.exists():
+        return None
+    match = SCRAPED_BILLS_DIR / f"{bill_id}.json"
+    return match if match.exists() else None
+
+
+@app.route("/api/admin/bills/<bill_id>/publish", methods=["POST"])
+@require_admin
+def admin_publish_bill(bill_id):
+    """
+    Moves a bill from 'needs_manual_review' (or any status) to 'open', with
+    real opens_at/closes_at dates the admin types in by hand.
+
+    Input:  { "opens_at": "YYYY-MM-DD", "closes_at": "YYYY-MM-DD" }
+    Output: { "status": "open", "bill_id": str, "opens_at": str, "closes_at": str }
+
+    Why manual dates, not a scraper: scraper.py/scraper_national.py can only
+    read the bill PDF itself, which never states the real public-
+    participation window — that's announced separately, in a county notice
+    or gazette entry (see scraper.py's own docstring). A notices scraper for
+    nairobi.go.ke was evaluated for this build and dropped: its notice pages
+    only serve nav chrome and a title through static HTML — the actual
+    notice text/dates are rendered client-side by JavaScript, which this
+    project's requests+BeautifulSoup scraping stack cannot read. So this
+    stays a deliberate human-in-the-loop step (the admin reads the real
+    notice themselves and types the two dates in here), not a gap to
+    "finish" later.
+
+    closes_at must be strictly after opens_at. Both are stored as plain
+    "YYYY-MM-DD" strings, matching every other date already in
+    scraped_bills/*.json.
+    """
+    path = _bill_path(bill_id)
+    if path is None:
+        return jsonify({"error": f"No bill found with id '{bill_id}'"}), 404
+
+    payload = request.get_json(force=True)
+    opens_at = (payload.get("opens_at") or "").strip()
+    closes_at = (payload.get("closes_at") or "").strip()
+    if not opens_at or not closes_at:
+        return jsonify({"error": "opens_at and closes_at are both required, e.g. '2026-08-18'"}), 400
+
+    try:
+        opens_dt = datetime.strptime(opens_at, "%Y-%m-%d")
+        closes_dt = datetime.strptime(closes_at, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "opens_at and closes_at must be in 'YYYY-MM-DD' format"}), 400
+    if closes_dt <= opens_dt:
+        return jsonify({"error": "closes_at must be after opens_at"}), 400
+
+    with open(path, "r", encoding="utf-8") as f:
+        bill = json.load(f)
+
+    bill["status"] = "open"
+    bill["opens_at"] = opens_at
+    bill["closes_at"] = closes_at
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(bill, f, ensure_ascii=False, indent=2)
+
+    return jsonify({"status": "open", "bill_id": bill_id, "opens_at": opens_at, "closes_at": closes_at})
+
 
 @app.route("/api/auth/request-otp", methods=["POST"])
 def request_otp():

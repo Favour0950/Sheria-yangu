@@ -38,6 +38,31 @@
     #admin-error { color: #c62828; margin-top: 8px; }
     .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .admin-header button { background: none; border: 1px solid #ccc; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    .admin-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .admin-tabs button {
+      flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
+      background: #f2f2f2; cursor: pointer; font-weight: 600;
+    }
+    .admin-tabs button.active { background: #2e7d32; color: white; border-color: #2e7d32; }
+    .bill-card {
+      border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-bottom: 16px;
+    }
+    .bill-card h4 { margin: 0 0 6px; }
+    .bill-status {
+      display: inline-block; font-size: 0.8em; font-weight: 600; border-radius: 6px;
+      padding: 2px 8px; margin-bottom: 10px;
+    }
+    .bill-status.open { background: #e6f4ea; color: #2e7d32; }
+    .bill-status.needs_manual_review { background: #fff4e0; color: #b5750a; }
+    .publish-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px; }
+    .publish-row div { display: flex; flex-direction: column; font-size: 0.8em; }
+    .publish-row input { padding: 6px; border-radius: 6px; border: 1px solid #ccc; }
+    .publish-row button {
+      padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer;
+      font-weight: 600; background: #1565c0; color: white; height: 34px;
+    }
+    .open-dates { font-size: 0.85em; color: #555; }
+    #bills-error { color: #c62828; font-size: 0.85em; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -54,10 +79,16 @@
   <!-- Review queue screen (hidden until logged in) -->
   <div id="review-screen" class="admin-wrap" style="display:none;">
     <div class="admin-header">
-      <h2>Pending Summary Reviews</h2>
+      <h2 id="screen-title">Pending Summary Reviews</h2>
       <button onclick="adminLogout()">Log Out</button>
     </div>
+    <div class="admin-tabs">
+      <button id="tab-summaries" class="active" onclick="switchTab('summaries')">Summary Reviews</button>
+      <button id="tab-bills" onclick="switchTab('bills')">Bills (Open/Closed)</button>
+    </div>
     <div id="review-list"></div>
+    <div id="bills-list" style="display:none;"></div>
+    <div id="bills-error"></div>
   </div>
 
   <script>
@@ -76,6 +107,28 @@
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('review-screen').style.display = 'block';
       loadPending();
+    }
+
+    function switchTab(tab) {
+      const summariesTab = document.getElementById('tab-summaries');
+      const billsTab = document.getElementById('tab-bills');
+      const reviewList = document.getElementById('review-list');
+      const billsList = document.getElementById('bills-list');
+      const title = document.getElementById('screen-title');
+      if (tab === 'bills') {
+        summariesTab.classList.remove('active');
+        billsTab.classList.add('active');
+        reviewList.style.display = 'none';
+        billsList.style.display = 'block';
+        title.textContent = 'Bills — Open/Closed Status';
+        loadBills();
+      } else {
+        billsTab.classList.remove('active');
+        summariesTab.classList.add('active');
+        billsList.style.display = 'none';
+        reviewList.style.display = 'block';
+        title.textContent = 'Pending Summary Reviews';
+      }
     }
 
     async function adminLogin() {
@@ -192,6 +245,107 @@
         }
       } catch (e) {
         alert('Could not reach the server.');
+      }
+    }
+
+    async function loadBills() {
+      const list = document.getElementById('bills-list');
+      const errorBox = document.getElementById('bills-error');
+      errorBox.textContent = '';
+      list.innerHTML = '<p>Loading…</p>';
+      try {
+        // /api/bills is public (no admin token needed) and returns every
+        // scraped bill regardless of status, unlike /api/bills/open.
+        const res = await fetch('/api/bills');
+        const items = await res.json();
+        renderBills(items);
+      } catch (e) {
+        list.innerHTML = '<p class="empty-state">Could not load bills.</p>';
+      }
+    }
+
+    function renderBills(items) {
+      const list = document.getElementById('bills-list');
+      list.innerHTML = '';
+      if (items.length === 0) {
+        list.innerHTML = '<div class="empty-state">No scraped bills yet.</div>';
+        return;
+      }
+      items.forEach(bill => {
+        const card = document.createElement('div');
+        card.className = 'bill-card';
+        card.id = `bill-${bill.id}`;
+        const statusClass = bill.status === 'open' ? 'open' : 'needs_manual_review';
+        const statusLabel = bill.status === 'open' ? 'Open' : 'Needs manual review';
+        let bodyHtml = `
+          <h4>${escapeHtml(bill.title || bill.id)}</h4>
+          <span class="bill-status ${statusClass}">${statusLabel}</span>
+        `;
+        if (bill.status === 'open') {
+          bodyHtml += `
+            <div class="open-dates">Open ${escapeHtml(bill.opens_at || '?')} → ${escapeHtml(bill.closes_at || '?')}</div>
+            <div class="publish-row">
+              <div>
+                <label>New opens</label>
+                <input type="date" id="opens-${bill.id}" value="${escapeHtml(bill.opens_at || '')}" />
+              </div>
+              <div>
+                <label>New closes</label>
+                <input type="date" id="closes-${bill.id}" value="${escapeHtml(bill.closes_at || '')}" />
+              </div>
+              <button onclick="publishBill('${bill.id}')">Update dates</button>
+            </div>
+          `;
+        } else {
+          bodyHtml += `
+            <div class="publish-row">
+              <div>
+                <label>Opens at</label>
+                <input type="date" id="opens-${bill.id}" />
+              </div>
+              <div>
+                <label>Closes at</label>
+                <input type="date" id="closes-${bill.id}" />
+              </div>
+              <button onclick="publishBill('${bill.id}')">Publish as open</button>
+            </div>
+          `;
+        }
+        card.innerHTML = bodyHtml;
+        list.appendChild(card);
+      });
+    }
+
+    async function publishBill(billId) {
+      const errorBox = document.getElementById('bills-error');
+      errorBox.textContent = '';
+      const opensAt = document.getElementById(`opens-${billId}`).value;
+      const closesAt = document.getElementById(`closes-${billId}`).value;
+      if (!opensAt || !closesAt) {
+        errorBox.textContent = 'Both dates are required — read the real dates off the county notice.';
+        return;
+      }
+      try {
+        const res = await fetch(`/api/admin/bills/${encodeURIComponent(billId)}/publish`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + getToken(),
+          },
+          body: JSON.stringify({ opens_at: opensAt, closes_at: closesAt }),
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok) {
+          errorBox.textContent = data.error || 'Something went wrong — try again.';
+          return;
+        }
+        loadBills();
+      } catch (e) {
+        errorBox.textContent = 'Could not reach the server.';
       }
     }
 

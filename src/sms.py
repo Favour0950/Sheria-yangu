@@ -223,8 +223,14 @@ if __name__ == "__main__":
 
     if args.test_otp:
         result = issue_otp(args.test_otp)
-        print(f"Generated code {result.code} (expires {result.expires_at.isoformat()}) "
-              f"— in sandbox mode this is NOT a real SMS, check your AT sandbox simulator.")
+        if AT_USERNAME == "sandbox":
+            mode_note = "sandbox mode — this did NOT send a real SMS, check your AT sandbox simulator."
+        else:
+            mode_note = (
+                f"LIVE mode (AT_USERNAME={AT_USERNAME!r}) — this sent a real SMS "
+                f"and charged real credit. Check the response above for the real cost/status."
+            )
+        print(f"Generated code {result.code} (expires {result.expires_at.isoformat()}) — {mode_note}")
     elif args.test_notification:
         send_bill_notification(
             args.test_notification,

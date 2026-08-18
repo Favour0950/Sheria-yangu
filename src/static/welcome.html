@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sheria Yangu — Your right to be heard, in your language, on your phone</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Sheria Yangu notifies you when a bill affecting you opens for public comment, translates it into plain English or Swahili, and sends your objection straight to the clerk who's legally required to log it.">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  :root {
+    --green: #0a7d3e;
+    --green-dark: #075c2d;
+    --bg: #f4f6f5;
+    --card: #ffffff;
+    --ink: #1b1f1d;
+    --ink-muted: #555555;
+    --border: #dddddd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--card);
+    color: var(--ink);
+    margin: 0;
+    line-height: 1.5;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  header.site-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--card);
+    z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 18px; }
+  .brand .logo { font-size: 22px; }
+  nav.links { display: flex; align-items: center; gap: 26px; font-size: 14px; }
+  nav.links a.muted { color: var(--ink-muted); }
+  .btn {
+    display: inline-block;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 11px 20px;
+    cursor: pointer;
+    border: none;
+  }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:hover { background: var(--green-dark); }
+  .btn-outline { background: none; border: 1px solid var(--green); color: var(--green-dark); }
+
+  section { padding: 60px 0; }
+  section.alt { background: var(--bg); }
+
+  .scroll-cue {
+    display: flex;
+    justify-content: center;
+    margin-top: 36px;
+    animation: bob 1.6s ease-in-out infinite;
+  }
+  .scroll-cue svg { width: 22px; height: 22px; }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(6px); }
+  }
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--green-dark);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .hero { text-align: center; padding: 76px 0 56px; }
+  .hero h1 { font-size: 38px; line-height: 1.25; margin: 0 0 16px; max-width: 780px; margin-left: auto; margin-right: auto; }
+  .hero p.lead { font-size: 16px; color: var(--ink-muted); max-width: 620px; margin: 0 auto 28px; }
+  .hero .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+  .notify-box {
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    text-align: left;
+  }
+  .notify-note { font-size: 12px; color: var(--ink-muted); margin-top: 10px; line-height: 1.5; }
+
+  .placeholder-photo {
+    background: var(--bg);
+    border: 1px dashed #bbb;
+    border-radius: 12px;
+    color: #888;
+    font-size: 13px;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    min-height: 220px;
+  }
+
+  .two-col { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; }
+  .two-col h2 { font-size: 25px; margin: 0 0 14px; }
+  .two-col p { color: var(--ink-muted); font-size: 15px; }
+
+  .stat-row { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
+  .stat-callout { background: var(--bg); border-radius: 10px; padding: 14px 18px; }
+  .stat-callout .num { font-size: 26px; font-weight: 700; color: var(--green-dark); }
+  .stat-callout .label { font-size: 12px; color: var(--ink-muted); max-width: 220px; }
+
+  .target-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 8px; }
+  .target-grid h3 { font-size: 16px; margin: 0 0 10px; }
+  .target-grid p, .target-grid li { color: var(--ink-muted); font-size: 14px; }
+  .target-grid ul { margin: 0; padding-left: 18px; }
+  .why-nairobi-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }
+  .why-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .why-card .num { font-size: 22px; font-weight: 700; color: var(--green-dark); display: block; }
+  .why-card .label { font-size: 12px; color: var(--ink-muted); }
+
+  .feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-top: 8px; }
+  .feature-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .feature-card .icon { font-size: 24px; margin-bottom: 10px; }
+  .feature-card h3 { font-size: 15px; margin: 0 0 6px; }
+  .feature-card p { font-size: 13px; color: var(--ink-muted); margin: 0; }
+
+  .flow-row { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; margin: 20px 0 36px; }
+  .flow-step { background: var(--bg); border-radius: 8px; padding: 12px 18px; font-size: 14px; font-weight: 600; }
+  .flow-step.final { background: var(--green); color: #fff; }
+  .flow-arrow { color: #999; font-size: 16px; }
+
+  .step-list { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .step-item { display: flex; gap: 14px; }
+  .step-num {
+    flex-shrink: 0;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--green);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step-item h4 { font-size: 15px; margin: 0 0 4px; }
+  .step-item p { font-size: 13px; color: var(--ink-muted); margin: 0; }
+
+  .sms-section .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .sms-compose { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .sms-compose label { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; }
+  .sms-compose textarea {
+    width: 100%;
+    min-height: 100px;
+    font-size: 14px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    resize: vertical;
+    font-family: inherit;
+  }
+  .sms-compose .to-line { font-size: 12px; color: var(--ink-muted); margin: 8px 0 12px; }
+  .sms-compose .to-line code { background: var(--bg); padding: 2px 6px; border-radius: 4px; }
+
+  .team-card { display: flex; gap: 16px; align-items: flex-start; }
+  .team-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: var(--bg); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: var(--green-dark); font-size: 15px; flex-shrink: 0;
+  }
+  .team-card h4 { font-size: 15px; margin: 0 0 4px; }
+  .team-card p { font-size: 13px; color: var(--ink-muted); margin: 0; }
+  .team-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 20px; }
+
+  .contact-section { text-align: center; }
+  .contact-email { display: inline-flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--green-dark); margin-top: 12px; }
+
+  footer {
+    padding: 24px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  footer a { text-decoration: underline; }
+
+  @media (max-width: 760px) {
+    nav.links a.muted { display: none; }
+    .hero h1 { font-size: 27px; }
+    .two-col, .target-grid, .step-list, .team-grid, .sms-section .wrap { grid-template-columns: 1fr; }
+    .feature-grid { grid-template-columns: 1fr 1fr; }
+    .why-nairobi-stats { grid-template-columns: 1fr; }
+    footer { flex-direction: column; text-align: center; }
+  }
+  @media (max-width: 480px) {
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-nav">
+  <div class="brand"><span class="logo">📜</span> Sheria Yangu</div>
+  <nav class="links">
+    <a href="#how-it-works" class="muted">How it works</a>
+    <a href="#who-we-are" class="muted">Who we are</a>
+    <a href="#contact" class="muted">Contact</a>
+    <a href="splash.html" class="btn btn-primary">Get started</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Mozilla Foundation × KamiLimu Buildathon</div>
+    <h1>Your right to be heard — in your language, on your phone.</h1>
+    <p class="lead">
+      Sheria Yangu notifies you when a Nairobi bill opens for public comment, translates
+      it into plain English or Swahili, and turns your objection into a real memorandum
+      sent to the clerk who's legally required to log it.
+    </p>
+
+    <div class="notify-box">
+      <div style="font-weight:600; font-size:14px; margin-bottom:6px;">Want to be notified about open bills in Nairobi?</div>
+      <div style="font-size:13px; color:var(--ink-muted); margin-bottom:14px;">
+        Sign in through the app — that's how we verify your number and can send you
+        automatic alerts.
+      </div>
+      <a href="signin.html" class="btn btn-primary" style="display:block; text-align:center;">Sign in to get notified →</a>
+      <div class="notify-note">Heads up: sign-in codes currently deliver reliably to Airtel numbers. Safaricom numbers sometimes need to be whitelisted for promotional SMS first (dial *456*9#, option 5, option 5) — we're working on this.</div>
+    </div>
+
+    <div class="cta-row" style="margin-top:20px;">
+      <a href="splash.html" class="btn btn-outline">Open the app →</a>
+      <a href="#how-it-works" class="btn btn-outline">See how it works</a>
+    </div>
+
+    <div class="scroll-cue" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--ink-muted);">
+        <path d="M12 5v14M19 12l-7 7-7-7"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">The problem</div>
+    <h2 style="font-size:26px; margin:0 0 14px;">A constitutional right that's practically unreachable</h2>
+    <p style="color:var(--ink-muted); font-size:15px; max-width:760px;">
+      Under Article 118 and Article 196 of Kenya's Constitution, citizens have a right to
+      participate in the laws and fees that affect them. In practice, bills are published
+      only in dense legal English, on platforms you have to already know to search, and
+      neither Parliament nor county assemblies are obligated to tell you when one is open
+      for comment. Since 2021, at least three Kenyan laws have been struck down by courts
+      for exactly this failure — but only after they'd already taken effect, and after
+      they'd already affected thousands of people who never knew they had a right to
+      object in the first place.
+    </p>
+  </div>
+</section>
+
+<section class="alt" id="who-this-is-for">
+  <div class="wrap">
+    <div class="eyebrow">Who this is for</div>
+    <h2 style="font-size:25px; margin:0 0 8px;">Built for people the system wasn't built to reach</h2>
+    <p style="color:var(--ink-muted); font-size:15px; max-width:760px; margin-bottom:20px;">
+      Mobile-first residents — boda boda riders, market vendors, small business owners,
+      students — who are comfortable with a phone and WhatsApp, but not with navigating a
+      government website or reading legal English. People who read and speak both Kiswahili
+      and English, and who currently only hear about a bill, if at all, from an informal
+      social-media summary shared after the fact.
+    </p>
+
+    <div class="two-col" style="align-items:start;">
+      <div>
+        <h3 style="font-size:16px; margin:0 0 8px;">Why Nairobi first</h3>
+        <p style="font-size:14px; color:var(--ink-muted); margin:0;">
+          This pilot starts with Nairobi County bills because of the scale of who's
+          affected here — and expands from there. Future versions carry the same
+          notification and translation pipeline to bills from any county assembly or
+          Parliament, not just Nairobi's Finance Act.
+        </p>
+      </div>
+      <div class="why-nairobi-stats">
+        <div class="why-card">
+          <span class="num">~5.5M</span>
+          <span class="label">residents (2026 projection — Kenya's next census is 2029)</span>
+        </div>
+        <div class="why-card">
+          <span class="num">27.4%</span>
+          <span class="label">of Kenya's national GDP, concentrated in one county (KNBS)</span>
+        </div>
+        <div class="why-card">
+          <span class="num">17/100</span>
+          <span class="label">Nairobi's own public participation score — its weakest measured area (2025 County Budget Transparency Survey)</span>
+        </div>
+      </div>
+    </div>
+    <p style="font-size:12px; color:var(--ink-muted); margin-top:14px;">
+      Nationally, Kenya's informal sector employs roughly 80% of the workforce — meaning
+      fee and levy changes hit take-home income directly, without the payroll protections
+      or advance notice many formal employees get.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">What Sheria Yangu does</div>
+    <h2 style="font-size:25px; margin:0 0 24px;">Four things, in order</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">🔍</div>
+        <h3>Detects open bills</h3>
+        <p>Nairobi County bills right now, tracked automatically as they open for public comment — county and national coverage is next.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🌐</div>
+        <h3>Plain English and Swahili</h3>
+        <p>Every clause translated into something you can actually read in the time you have.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">✅</div>
+        <h3>Vote clause by clause</h3>
+        <p>Accept or reject each clause on its own — not the whole bill at once.</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📨</div>
+        <h3>Drafts your memorandum</h3>
+        <p>Rejected clauses become a real, formatted objection — sent to the county assembly clerk.</p>
+      </div>
+    </div>
+    <p style="font-size:13px; color:var(--ink-muted); margin-top:20px;">
+      Curious how Nairobi is voting so far? <a href="analytics.html" style="color:var(--green-dark); text-decoration:underline;">See results by constituency →</a> No sign-in needed.
+    </p>
+  </div>
+</section>
+
+<section class="alt" id="how-it-works">
+  <div class="wrap" style="text-align:center;">
+    <div class="eyebrow">How it works</div>
+    <h2 style="font-size:25px; margin:0 0 8px;">From an open bill to a logged objection</h2>
+    <p style="color:var(--ink-muted); font-size:14px; max-width:520px; margin:0 auto;">
+      Every step happens in minutes, not months.
+    </p>
+    <div class="flow-row">
+      <span class="flow-step">Detect</span><span class="flow-arrow">→</span>
+      <span class="flow-step">Translate</span><span class="flow-arrow">→</span>
+      <span class="flow-step">Review</span><span class="flow-arrow">→</span>
+      <span class="flow-step">Notify</span><span class="flow-arrow">→</span>
+      <span class="flow-step">Vote</span><span class="flow-arrow">→</span>
+      <span class="flow-step final">Send</span>
+    </div>
+    <div class="step-list" style="text-align:left;">
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div><h4>Detect</h4><p>Our scrapers check county and national bill sources for anything newly published or newly open for comment.</p></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div><h4>Translate</h4><p>Each clause is turned into a short, plain-language summary in English and Swahili by an LLM.</p></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div><h4>Review</h4><p>A human admin checks each summary against the real bill text before it ever reaches a citizen.</p></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">4</div>
+        <div><h4>Notify</h4><p>You get an SMS or in-app alert the moment a Nairobi bill opens for comment.</p></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">5</div>
+        <div><h4>Vote</h4><p>Read each clause's summary and accept or reject it — one clause at a time, not the whole bill.</p></div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">6</div>
+        <div><h4>Send</h4><p>Every clause you rejected is drafted into one formal memorandum, addressed and sent to the clerk legally required to log it.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sms-section">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Feedback & insights via SMS</div>
+      <h2 style="font-size:24px; margin:0 0 12px;">Sheria Yangu is an app — this is the feedback line</h2>
+      <p style="color:var(--ink-muted); font-size:15px;">
+        Signing in, reading bills, and submitting a memorandum all happen in the app.
+        Alongside that, you can text feedback or a question straight to us on the shared
+        KamiLimu shortcode — draft it below and it opens ready to send from your own phone.
+      </p>
+    </div>
+    <div class="sms-compose">
+      <label for="sms-text">Your message</label>
+      <textarea id="sms-text" placeholder="Type your feedback or question here…"></textarea>
+      <div class="to-line">Sends to <code>20880</code>, prefixed with <code>kamilimu sheriayangu</code></div>
+      <button class="btn btn-primary" onclick="sendFeedbackSms()">Send via SMS →</button>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="who-we-are">
+  <div class="wrap">
+    <div class="eyebrow">Who we are</div>
+    <h2 style="font-size:25px; margin:0 0 8px;">A student team, built to keep running past the hackathon</h2>
+    <p style="color:var(--ink-muted); font-size:15px; max-width:700px; margin-bottom:20px;">
+      Sheria Yangu was built for the Mozilla Foundation × KamiLimu Democracy & AI
+      Buildathon by two student developers, both Nairobi residents who've paid one of
+      these fees themselves.
+    </p>
+    <div class="team-grid">
+      <div class="team-card">
+        <div class="team-avatar">VO</div>
+        <div>
+          <h4>Onyango Violet Atieno</h4>
+          <p>Full-stack developer, University of Nairobi. Built the bill scrapers and the citizen-facing app.</p>
+        </div>
+      </div>
+      <div class="team-card">
+        <div class="team-avatar">CA</div>
+        <div>
+          <h4>Catherine Atieno</h4>
+          <p>Backend developer, JKUAT. Built the AI integration, admin review backend, and auth.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="contact-section" id="contact">
+  <div class="wrap">
+    <div class="eyebrow">Contact us</div>
+    <h2 style="font-size:24px; margin:0 0 8px;">Questions, feedback, or partnership ideas</h2>
+    <p style="color:var(--ink-muted); font-size:14px;">We'd like to hear them.</p>
+    <div class="contact-email">✉ sheriayangu@gmail.com</div>
+  </div>
+</section>
+
+<footer>
+  <span>© 2026 Sheria Yangu · Onyango Violet Atieno & Catherine Atieno</span>
+  <a href="policy.html">Terms &amp; privacy</a>
+</footer>
+
+<script>
+  function sendFeedbackSms() {
+    const text = document.getElementById('sms-text').value.trim();
+    const body = 'kamilimu sheriayangu ' + text;
+    window.location.href = 'sms:20880?body=' + encodeURIComponent(body);
+  }
+</script>
+</body>
+</html>
