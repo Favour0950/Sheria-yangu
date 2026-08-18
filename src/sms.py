@@ -56,6 +56,15 @@ BILL_NOTIFICATION_TEMPLATE = (
     "Have your say before {closes_at}. Read it in plain English/Swahili: {link}"
 )
 
+# Sent to ADMIN_NOTIFY_PHONE (.env), never to a citizen — alerts a human that
+# the scraper found bill(s) sitting in needs_manual_review, waiting for the
+# generate-summaries -> review -> publish workflow. See
+# run_scrapers_and_notify.py, the cron entry point this is called from.
+ADMIN_NEW_BILLS_TEMPLATE = (
+    "Sheria Yangu: {count} new bill(s) scraped, pending your review: {titles}. "
+    "Log in to admin.html to review and publish."
+)
+
 
 @dataclass
 class OtpIssued:
@@ -212,6 +221,23 @@ def send_bill_notification(phone_number: str, bill_title: str, level: str,
     )
     response = _send_sms(phone_number, message)
     print(f"[sms] Notification send response for {phone_number}: {response}")
+    return response
+
+
+def notify_admin_new_bills(phone_number: str, bill_titles: list) -> dict:
+    """
+    Texts the admin that new bill(s) just showed up in needs_manual_review.
+    Caps the listed titles at 5 so the message doesn't blow past SMS length
+    limits on a big scrape run — the admin can see the full list in
+    admin.html regardless, this is just an alert, not the full detail.
+    """
+    shown = bill_titles[:5]
+    titles_joined = "; ".join(shown)
+    if len(bill_titles) > 5:
+        titles_joined += f"; +{len(bill_titles) - 5} more"
+    message = ADMIN_NEW_BILLS_TEMPLATE.format(count=len(bill_titles), titles=titles_joined)
+    response = _send_sms(phone_number, message)
+    print(f"[sms] Admin new-bills notification send response: {response}")
     return response
 
 
