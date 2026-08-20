@@ -48,7 +48,10 @@
        on your behalf automatically. It drafts a memorandum for you to
        review and edit, then opens your own email app (or gives you the text
        and address to paste into your own webmail) so you send it yourself.
-       We only record that you did.</p>
+       We only record that you did. Before you can vote on a clause, you must
+       confirm you've read and understood its summary — that confirmation is
+       stored alongside your memorandum, so what you send reflects a clause
+       you actually engaged with, not a blind reaction.</p>
 
     <h3>One memorandum per bill</h3>
     <p>You can send one memorandum per bill — this stops the same objection
@@ -59,6 +62,69 @@
     <p>SMS, email, and in-app notifications are all opt-in, controlled in
        Settings. Turning them off stops future notifications; it doesn't
        delete your past votes or memoranda.</p>
+
+    <h3>How accurate are the AI summaries?</h3>
+    <p>Clause summaries are drafted by an AI model, but we don't claim 100%
+       accuracy — no summarizer, human or AI, can promise that. What we do
+       guarantee is that no summary reaches you until an admin has read the
+       original clause text side by side with the AI's draft and marked it
+       verified. We track this as a simple number: clauses verified out of
+       clauses scraped for a bill. A bill only opens for public participation
+       once every one of its clauses has cleared that review — you can check
+       a bill's own status page to see this for yourself.</p>
+
+    <h3>Who reviews before you see it</h3>
+    <p>A human admin, not just the AI, checks every clause summary against
+       the source bill PDF before it's shown to citizens. If a summary looks
+       wrong, the admin edits or rejects it and the AI is asked again — you
+       never see an unreviewed draft.</p>
+
+    <h3>How long we keep your data</h3>
+    <p>Votes, memoranda, and the read/understood confirmations tied to them
+       are kept for as long as the bill they relate to remains relevant to
+       county or national records — this is a hackathon build, so today that
+       means indefinitely, until we publish a formal retention schedule.
+       You can ask us to delete your account's data at any time (see
+       "Your rights" below).</p>
+
+    <h3>Third parties we share data with</h3>
+    <p>Clause text is sent to DeepSeek (our AI provider) to generate a draft
+       summary — no phone number, name, or identity ever accompanies that
+       request. SMS messages (OTPs, notifications, feedback) pass through
+       our SMS gateway provider to reach your phone. Neither third party
+       receives your votes, memoranda, or constituency.</p>
+
+    <h3>Your rights over your data</h3>
+    <p>You can ask us to show you what's linked to your account, correct a
+       mistaken constituency entry, or delete your account and its
+       associated votes/memoranda. Because your phone number is stored only
+       as a one-way hash, we can locate your record by re-hashing the number
+       you give us — we can't look you up by name.</p>
+
+    <h3>Security measures</h3>
+    <p>Phone numbers are hashed, never stored in plain text. Sign-in uses
+       short-lived OTPs and signed session tokens (JWTs), not passwords.
+       Admin actions require a separate admin credential from citizen
+       sign-in. All traffic to the app is encrypted in transit.</p>
+
+    <h3>Not legal advice</h3>
+    <p>Sheria Yangu helps you understand and participate in a bill's public
+       participation process — it doesn't replace a lawyer, and sending a
+       memorandum through the app doesn't guarantee any particular outcome
+       from Parliament or a county assembly. For legal advice specific to
+       your situation, consult a licensed advocate.</p>
+
+    <h3>Changes to this policy</h3>
+    <p>If we materially change what we collect or how we use it, we'll
+       update this page and, where practical, notify you in-app before the
+       change takes effect. Continuing to use Sheria Yangu after a change
+       means you accept the updated policy.</p>
+
+    <h3>Complaints & contact</h3>
+    <p>If you believe your data has been mishandled, or something on this
+       page doesn't match what the app actually does, use the in-app
+       feedback option or the contact details on our welcome page to reach
+       the team directly.</p>
 
     <h3>Questions</h3>
     <p>This is a hackathon-stage build from the Mozilla Foundation x KamiLimu

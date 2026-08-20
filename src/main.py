@@ -51,6 +51,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_PATH = BASE_DIR / "data" / "sample_bill.json"
 SCRAPED_BILLS_DIR = BASE_DIR / "data" / "scraped_bills"
+INBOUND_SMS_PATH = BASE_DIR / "data" / "inbound_sms.json"
 FRONTEND_DIR = BASE_DIR / "src" / "static"
 
 app = Flask(__name__, static_folder=None)
@@ -1418,11 +1419,17 @@ def sms_inbound():
     reply is supposed to *do*. Until then this just proves the plumbing
     works, so a callback URL can be registered with Mark today.
 
-    Payload shape is a guess, matching Africa's Talking's normal incoming-SMS
-    webhook fields (from, to, text, date, id, linkId) — Mark's re-POST may or
-    may not preserve these exactly. First real message that arrives should be
-    checked against request.form (see the log line below) and this docstring
-    updated once we know for sure.
+    Payload shape confirmed against a real message received 2026-08-18: from,
+    to, text, message (usually empty — real content is in "text"), sub_route
+    ("sheriayangu" — Mark's upstream routing already stripped the "kamilimu
+    sheriayangu" prefix by the time it reaches here), date, id, linkId.
+
+    Every message is now also persisted to data/inbound_sms.json (see
+    _load_inbound_sms/_save_inbound_sms below) and readable via
+    GET /api/admin/feedback — added because the only way to see a received
+    message used to be SSHing into the VPS and grepping journalctl, which
+    isn't something a judge (or anyone without VPS access) can do to verify
+    this actually works.
     """
     data = request.form.to_dict() or request.get_json(silent=True) or {}
     print(f"[sms_inbound] raw payload received: {data}")
@@ -1431,10 +1438,53 @@ def sms_inbound():
     text = data.get("text", "")
     print(f"[sms_inbound] from={sender!r} text={text!r}")
 
+    messages = _load_inbound_sms()
+    messages.append({
+        "from": sender,
+        "text": text,
+        "at_date": data.get("date"),  # Africa's Talking's own timestamp, if present
+        "received_at": datetime.now().isoformat(),
+        "at_id": data.get("id"),
+    })
+    _save_inbound_sms(messages)
+
     # Africa's Talking (and presumably Mark's re-POST) expects a 200 with an
     # empty/plain body to acknowledge receipt — returning JSON here is not
     # required by the spec but doesn't hurt; keep it minimal either way.
     return "", 200
+
+
+def _load_inbound_sms() -> list:
+    """Loads every inbound SMS received so far. Returns [] if nothing's
+    arrived yet or the file doesn't exist (normal before the first message)."""
+    if not INBOUND_SMS_PATH.exists():
+        return []
+    try:
+        with open(INBOUND_SMS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_inbound_sms(messages: list) -> None:
+    INBOUND_SMS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(INBOUND_SMS_PATH, "w", encoding="utf-8") as f:
+        json.dump(messages, f, ensure_ascii=False, indent=2)
+
+
+@app.route("/api/admin/feedback", methods=["GET"])
+@require_admin
+def admin_feedback():
+    """
+    Output: [ { "from": str, "text": str, "at_date": str|None,
+                "received_at": str, "at_id": str|None }, ... ]  (newest first)
+
+    The admin-visible counterpart to sms_inbound()'s persisted messages — so
+    a judge or admin can see real inbound feedback through admin.html,
+    without needing VPS/SSH access to grep journalctl.
+    """
+    messages = _load_inbound_sms()
+    return jsonify(list(reversed(messages)))
 
 
 if __name__ == "__main__":

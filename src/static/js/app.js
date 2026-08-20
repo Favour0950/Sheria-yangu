@@ -29,6 +29,21 @@ const SY = {
   getBillId() { return localStorage.getItem('sy_current_bill_id') || ''; },
   setBillId(id) { localStorage.setItem('sy_current_bill_id', id); },
 
+  /** Which currently-open bill ids this browser has already seen on the
+   *  notifications page — per-device only (localStorage, no backend table),
+   *  a deliberate scope cut: if someone switches phones or clears their
+   *  browser, "seen" resets. Fine for now; cross-device sync is a real
+   *  later upgrade, not something to build under this much time pressure. */
+  getSeenBillIds() {
+    try { return JSON.parse(localStorage.getItem('sy_seen_bill_ids') || '[]'); }
+    catch (e) { return []; }
+  },
+  markBillsSeen(ids) {
+    const seen = new Set(SY.getSeenBillIds());
+    ids.forEach(id => seen.add(id));
+    localStorage.setItem('sy_seen_bill_ids', JSON.stringify([...seen]));
+  },
+
   getVotes() {
     try { return JSON.parse(localStorage.getItem('sy_pending_votes') || '{}'); }
     catch (e) { return {}; }
@@ -114,9 +129,11 @@ const SY = {
 
     const items = [
       { id: 'bills', label: '📜 Bills', href: 'bill-detail.html' },
+      { id: 'notifications', label: '🔔 Notifications', href: 'notifications.html' },
       { id: 'profile', label: '👤 Profile', href: 'profile.html' },
       { id: 'settings', label: '⚙️ Settings', href: 'settings.html' },
       { id: 'analytics', label: '📊 County analytics', href: 'analytics.html' },
+      { id: 'feedback', label: '💬 Send feedback', href: 'feedback.html' },
       { id: 'policy', label: '📄 Terms & data policy', href: 'policy.html' },
     ];
 
@@ -124,6 +141,25 @@ const SY = {
     hamburger.className = 'sy-hamburger';
     hamburger.setAttribute('aria-label', 'Menu');
     hamburger.textContent = '☰';
+
+    // Best-effort unseen-notifications dot — /api/bills/open is public, so
+    // this never blocks the drawer itself if it fails; a missing badge just
+    // means "couldn't check," not a broken menu.
+    fetch('/api/bills/open')
+      .then(res => res.json())
+      .then(openBills => {
+        const seen = new Set(SY.getSeenBillIds());
+        const unseenCount = openBills.filter(b => !seen.has(b.id)).length;
+        if (unseenCount > 0) {
+          const dot = document.createElement('span');
+          dot.textContent = unseenCount;
+          dot.style.cssText = 'position:absolute; top:8px; right:34px; background:var(--red); ' +
+            'color:white; font-size:10px; font-weight:700; border-radius:9px; min-width:16px; ' +
+            'height:16px; line-height:16px; text-align:center; padding:0 3px; z-index:31;';
+          phone.appendChild(dot);
+        }
+      })
+      .catch(() => {});
 
     const overlay = document.createElement('div');
     overlay.className = 'sy-drawer-overlay';

@@ -85,10 +85,12 @@
     <div class="admin-tabs">
       <button id="tab-summaries" class="active" onclick="switchTab('summaries')">Summary Reviews</button>
       <button id="tab-bills" onclick="switchTab('bills')">Bills (Open/Closed)</button>
+      <button id="tab-feedback" onclick="switchTab('feedback')">Feedback (SMS)</button>
     </div>
     <div id="review-list"></div>
     <div id="bills-list" style="display:none;"></div>
     <div id="bills-error"></div>
+    <div id="feedback-list" style="display:none;"></div>
   </div>
 
   <script>
@@ -107,28 +109,23 @@
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('review-screen').style.display = 'block';
       loadPending();
+      loadBills(); // also populates the Bills tab's pending-count badge immediately, without needing to open that tab first
     }
 
+    const TABS = {
+      summaries: { button: 'tab-summaries', list: 'review-list', title: 'Pending Summary Reviews', load: loadPending },
+      bills: { button: 'tab-bills', list: 'bills-list', title: 'Bills — Open/Closed Status', load: loadBills },
+      feedback: { button: 'tab-feedback', list: 'feedback-list', title: 'Feedback via SMS', load: loadFeedback },
+    };
+
     function switchTab(tab) {
-      const summariesTab = document.getElementById('tab-summaries');
-      const billsTab = document.getElementById('tab-bills');
-      const reviewList = document.getElementById('review-list');
-      const billsList = document.getElementById('bills-list');
       const title = document.getElementById('screen-title');
-      if (tab === 'bills') {
-        summariesTab.classList.remove('active');
-        billsTab.classList.add('active');
-        reviewList.style.display = 'none';
-        billsList.style.display = 'block';
-        title.textContent = 'Bills — Open/Closed Status';
-        loadBills();
-      } else {
-        billsTab.classList.remove('active');
-        summariesTab.classList.add('active');
-        billsList.style.display = 'none';
-        reviewList.style.display = 'block';
-        title.textContent = 'Pending Summary Reviews';
-      }
+      Object.entries(TABS).forEach(([name, cfg]) => {
+        document.getElementById(cfg.button).classList.toggle('active', name === tab);
+        document.getElementById(cfg.list).style.display = name === tab ? 'block' : 'none';
+      });
+      title.textContent = TABS[tab].title;
+      TABS[tab].load();
     }
 
     async function adminLogin() {
@@ -268,7 +265,15 @@
       }
     }
 
+    function updateBillsBadge(items) {
+      const btn = document.getElementById('tab-bills');
+      if (!btn) return;
+      const pending = items.filter(b => b.status !== 'open').length;
+      btn.textContent = pending > 0 ? `Bills (${pending})` : 'Bills (Open/Closed)';
+    }
+
     function renderBills(items) {
+      updateBillsBadge(items);
       const list = document.getElementById('bills-list');
       list.innerHTML = '';
       if (items.length === 0) {
@@ -433,6 +438,44 @@
       } catch (e) {
         errorBox.textContent = 'Could not reach the server.';
       }
+    }
+
+    async function loadFeedback() {
+      const list = document.getElementById('feedback-list');
+      list.innerHTML = '<p>Loading…</p>';
+      try {
+        const res = await fetch('/api/admin/feedback', {
+          headers: { 'Authorization': 'Bearer ' + getToken() },
+        });
+        if (res.status === 401 || res.status === 403) {
+          adminLogout();
+          return;
+        }
+        const items = await res.json();
+        renderFeedback(items);
+      } catch (e) {
+        list.innerHTML = '<p class="empty-state">Could not load feedback.</p>';
+      }
+    }
+
+    function renderFeedback(items) {
+      const list = document.getElementById('feedback-list');
+      list.innerHTML = '';
+      if (items.length === 0) {
+        list.innerHTML = '<div class="empty-state">No SMS feedback received yet. ' +
+          'Messages sent to the shared shortcode (20880, "kamilimu sheriayangu ...") show up here.</div>';
+        return;
+      }
+      items.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'bill-card';
+        const when = item.received_at ? new Date(item.received_at).toLocaleString() : (item.at_date || 'unknown time');
+        card.innerHTML = `
+          <div style="font-size:0.8em;color:#777;margin-bottom:6px;">${escapeHtml(item.from || 'unknown number')} — ${escapeHtml(when)}</div>
+          <div style="white-space:pre-wrap;">${escapeHtml(item.text || '')}</div>
+        `;
+        list.appendChild(card);
+      });
     }
 
     // On page load, check if already logged in

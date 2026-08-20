@@ -92,14 +92,21 @@ def main():
 
     if not ADMIN_NOTIFY_PHONE:
         print("ADMIN_NOTIFY_PHONE not set in .env — skipping SMS notification. "
-              "Set it to the admin's real phone number to enable this.")
+              "Set it to one or more admin phone numbers (comma-separated) to enable this.")
         return
 
-    try:
-        import sms
-        sms.notify_admin_new_bills(ADMIN_NOTIFY_PHONE, titles)
-    except Exception as exc:
-        print(f"!! failed to send admin notification SMS: {exc}")
+    # Comma-separated so both Violet and Catherine (or anyone else) can be
+    # notified, not just one hardcoded number — e.g.
+    # ADMIN_NOTIFY_PHONE=+254700000001,+254700000002 in .env. Each number is
+    # sent to independently so one bad/unreachable number doesn't block the
+    # others from getting notified.
+    phone_numbers = [p.strip() for p in ADMIN_NOTIFY_PHONE.split(",") if p.strip()]
+    import sms
+    for phone in phone_numbers:
+        try:
+            sms.notify_admin_new_bills(phone, titles)
+        except Exception as exc:
+            print(f"!! failed to send admin notification SMS to {phone}: {exc}")
 
 
 if __name__ == "__main__":
