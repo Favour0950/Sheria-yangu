@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timedelta
 from functools import wraps
@@ -61,6 +62,34 @@ app = Flask(__name__, static_folder=None)
 # isn't set yet — only the /api/auth/* routes below actually need it.
 _engine = create_engine(DATABASE_URL) if DATABASE_URL else None
 _SessionLocal = sessionmaker(bind=_engine) if _engine else None
+
+
+def normalize_phone_number(raw: str) -> str:
+    """Accepts any of the formats Kenyans actually type — 0712345678,
+    254712345678, +254712345678, or even bare 712345678/112345678 — and
+    returns a single canonical +254XXXXXXXXX form. This is what gets hashed
+    and what gets sent to the SMS gateway, so the same person always maps to
+    the same phone_hash no matter which format they typed, and Africa's
+    Talking (which requires E.164, +254...) never sees a malformed number.
+
+    Raises ValueError with a citizen-facing message if the number isn't a
+    plausible Kenyan mobile number — callers should catch this and return a
+    400 with the message, not let it surface as a generic server error.
+    """
+    digits = re.sub(r"[^\d+]", "", raw or "")
+
+    if digits.startswith("+254") and len(digits) == 13 and digits[4] in "17":
+        return digits
+    if digits.startswith("254") and len(digits) == 12 and digits[3] in "17":
+        return "+" + digits
+    if digits.startswith("0") and len(digits) == 10 and digits[1] in "17":
+        return "+254" + digits[1:]
+    if len(digits) == 9 and digits[0] in "17":
+        return "+254" + digits
+
+    raise ValueError(
+        "Enter a valid Kenyan phone number, e.g. 0712345678, 254712345678, or +254712345678."
+    )
 
 
 def hash_phone(phone_number: str) -> str:
@@ -1062,6 +1091,11 @@ def request_otp():
     if not phone_number:
         return jsonify({"error": "phone_number is required"}), 400
 
+    try:
+        phone_number = normalize_phone_number(phone_number)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
     phone_hash = hash_phone(phone_number)
     session = _SessionLocal()
     try:
@@ -1116,6 +1150,11 @@ def verify_otp():
     code = payload.get("code", "").strip()
     if not phone_number or not code:
         return jsonify({"error": "phone_number and code are required"}), 400
+
+    try:
+        phone_number = normalize_phone_number(phone_number)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     phone_hash = hash_phone(phone_number)
     session = _SessionLocal()
